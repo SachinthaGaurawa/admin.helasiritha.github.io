@@ -1,16 +1,1297 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="si">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My First Webpage</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b1813" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>හෙළ සිරිත · පරිපාලන පුවරුව</title>
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+/* ════════════════════════════════════════════════════════════════════════
+ *  හෙළ සිරිත · ADMIN STYLES  ·  assets/css/admin.css
+ *  Modern, clean, functional control panel. Light content + brass-accented
+ *  dark sidebar. Fully responsive (sidebar → drawer on phones/tablets).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --gold:#C9A574; --gold-d:#A48354; --ink:#1d1a14; --bg:#f4f1ea; --panel:#ffffff;
+  --line:#e7e1d3; --muted:#7d766a; --sidebar:#1b1813; --sidebar-2:#241f17;
+  --ok:#2f8f5b; --warn:#c08a1e; --bad:#c0473b;
+  --r:14px; --shadow:0 12px 34px -22px rgba(40,30,10,.5);
+  --font:"Noto Sans Sinhala","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; }
+body { font-family:var(--font); background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%; }
+img { max-width:100%; display:block; }
+a { color:inherit; text-decoration:none; }
+button,input,select,textarea { font-family:inherit; }
+code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; }
+
+/* ───────────── buttons / inputs (shared) ───────────── */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:.5em; border:1px solid var(--line);
+  background:#fff; color:var(--ink); padding:.7em 1.15em; border-radius:10px; font-weight:600; cursor:pointer; transition:.2s; }
+.btn:hover { transform:translateY(-1px); box-shadow:var(--shadow); }
+.btn.primary { background:linear-gradient(135deg,#E7CE97,#C9A574 60%,#A48354); color:#241a05; border-color:transparent; }
+.btn.ghost { background:transparent; }
+.btn.danger { color:#fff; background:var(--bad); border-color:transparent; }
+.btn.ok { color:#fff; background:var(--ok); border-color:transparent; }
+.btn.sm { padding:.45em .8em; font-size:.85rem; }
+.btn.xs { padding:.32em .6em; font-size:.78rem; border-radius:8px; }
+.btn:disabled { opacity:.6; cursor:default; transform:none; }
+.input { width:100%; padding:.7em .85em; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); font-size:.95rem; }
+.input:focus { outline:2px solid color-mix(in srgb,var(--gold) 70%, transparent); border-color:var(--gold); }
+.field { display:grid; gap:6px; margin-bottom:14px; }
+.field label { font-weight:600; font-size:.9rem; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.muted { color:var(--muted); font-size:.9rem; }
+
+.switch { display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none; margin:6px 0; }
+.switch input { display:none; }
+.switch span { width:42px; height:24px; border-radius:999px; background:#d8d1c2; position:relative; transition:.2s; flex:0 0 auto; }
+.switch span::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:.2s; }
+.switch input:checked + span { background:var(--gold); }
+.switch input:checked + span::after { transform:translateX(18px); }
+.switch.big { display:flex; justify-content:flex-start; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
+
+/* ───────────── LOGIN ───────────── */
+#login { min-height:100svh; display:grid; place-items:center; padding:24px;
+  background:radial-gradient(900px 500px at 50% -10%, color-mix(in srgb,var(--gold) 26%, transparent), transparent 60%), var(--sidebar); }
+.login-card { width:100%; max-width:400px; background:var(--panel); border-radius:18px; padding:34px 28px; box-shadow:0 30px 80px -30px #000; }
+.login-card .logo { width:64px; height:64px; margin:0 auto 12px; border-radius:50%; display:grid; place-items:center;
+  background:linear-gradient(135deg,#E7CE97,#A48354); color:#241a05; font-weight:800; font-size:1.4rem; }
+.login-card h1 { text-align:center; margin:.2em 0; font-size:1.4rem; }
+.login-card .sub { text-align:center; color:var(--muted); margin:0 0 18px; font-size:.92rem; }
+.g-btn { width:100%; gap:10px; }
+.g-btn svg { width:20px; height:20px; }
+.divider-or { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:.82rem; margin:16px 0; }
+.divider-or::before, .divider-or::after { content:""; flex:1; height:1px; background:var(--line); }
+.login-err { color:var(--bad); font-size:.88rem; min-height:1.2em; text-align:center; margin-top:10px; }
+.login-foot { text-align:center; margin-top:14px; font-size:.82rem; color:var(--muted); }
+.link-btn { background:none; border:none; color:var(--gold-d); cursor:pointer; font-size:.85rem; padding:0; }
+
+/* ───────────── APP SHELL ───────────── */
+#app { display:grid; grid-template-columns:264px 1fr; min-height:100svh; }
+#sidebar { background:var(--sidebar); color:#e9e2d2; display:flex; flex-direction:column; position:sticky; top:0; height:100svh; overflow:auto; }
+.side-brand { padding:20px 18px; font-weight:800; font-size:1.15rem; letter-spacing:.04em; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--sidebar-2); }
+.side-brand .dot { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#E7CE97,#A48354); flex:0 0 auto; }
+#nav { padding:10px 10px 20px; flex:1; }
+.nav-group { margin-top:14px; }
+.nav-group-label { font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:#8c8473; padding:6px 10px; }
+.nav-item { width:100%; display:flex; align-items:center; gap:10px; padding:.7em .8em; border:none; background:none; color:#d8d1bf; border-radius:10px; cursor:pointer; text-align:start; font-size:.92rem; }
+.nav-item svg { width:18px; height:18px; opacity:.8; flex:0 0 auto; }
+.nav-item:hover { background:var(--sidebar-2); color:#fff; }
+.nav-item.active { background:linear-gradient(135deg,#E7CE97,#A48354); color:#241a05; font-weight:700; }
+.nav-item.active svg { opacity:1; }
+.side-foot { padding:14px; border-top:1px solid var(--sidebar-2); }
+.whoami { font-size:.78rem; color:#9b9485; margin-bottom:8px; word-break:break-all; }
+
+#content { display:flex; flex-direction:column; min-width:0; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px; padding:14px 22px;
+  background:color-mix(in srgb,var(--bg) 92%, #fff); border-bottom:1px solid var(--line); backdrop-filter:blur(6px); }
+.topbar .crumb { font-weight:700; font-size:1.05rem; }
+.topbar .spacer { flex:1; }
+#menuBtn { display:none; }
+#main { padding:22px; overflow:auto; }
+
+/* ───────────── module head + panels ───────────── */
+.mod-head { margin-bottom:16px; }
+.mod-head h1 { margin:0; font-size:1.5rem; }
+.mod-head p { margin:4px 0 0; color:var(--muted); }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; margin-bottom:18px; box-shadow:var(--shadow); }
+.panel h3 { margin:0 0 12px; font-size:1.1rem; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.sm-input { max-width:240px; }
+
+/* stats */
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:14px; }
+.stat { padding:16px; border-radius:12px; background:#faf7f0; border:1px solid var(--line); text-align:center; }
+.stat .n { font-size:2rem; font-weight:800; line-height:1; }
+.stat .l { color:var(--muted); font-size:.85rem; margin-top:6px; }
+.stat.ok .n { color:var(--ok); } .stat.warn .n { color:var(--warn); } .stat.bad .n { color:var(--bad); }
+.split { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.split-name { font-weight:800; margin-bottom:8px; }
+.split-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); }
+.big-total { font-weight:800; color:var(--gold-d); }
+
+/* tables */
+.tbl-scroll { overflow:auto; }
+.tbl { width:100%; border-collapse:collapse; font-size:.92rem; }
+.tbl th, .tbl td { text-align:start; padding:.6em .7em; border-bottom:1px solid var(--line); white-space:nowrap; }
+.tbl th { color:var(--muted); font-weight:700; font-size:.82rem; }
+.mini { padding:.35em .5em; border:1px solid var(--line); border-radius:8px; background:#fff; }
+.chip { padding:2px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }
+.chip.ok { background:#e3f3ea; color:var(--ok); } .chip.warn { background:#f7eed6; color:var(--warn); } .chip.bad { background:#f7e0dd; color:var(--bad); }
+
+/* lines (agenda/blessings/budget) */
+.line { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line); }
+.line:last-child { border-bottom:0; }
+.line-actions { display:flex; gap:6px; flex:0 0 auto; }
+
+/* color rows */
+.color-row { display:flex; gap:8px; align-items:center; }
+.color-row input[type=color] { width:46px; height:40px; border:1px solid var(--line); border-radius:8px; background:#fff; padding:2px; }
+.preset-row { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* gallery */
+.gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; }
+.gal-cell { position:relative; border-radius:10px; overflow:hidden; border:1px solid var(--line); }
+.gal-cell img { width:100%; aspect-ratio:1; object-fit:cover; }
+.gal-cell .del { position:absolute; top:6px; right:6px; }
+.progress { height:8px; background:#eee; border-radius:999px; overflow:hidden; margin:10px 0; }
+.progress .bar { height:100%; width:0; background:linear-gradient(90deg,#E7CE97,#A48354); transition:width .2s; }
+
+/* qr */
+.qr-stage { display:grid; place-items:center; padding:14px; }
+.qr-stage img { border:1px solid var(--line); border-radius:12px; background:#fff; }
+
+/* toast */
+#toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+  background:#241f17; color:#fff; padding:12px 20px; border-radius:999px; font-size:.92rem; z-index:200; transition:.3s; box-shadow:0 16px 40px -16px #000; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.bad { background:var(--bad); } #toast.warn { background:var(--warn); }
+
+#scrim { display:none; }
+
+/* ───────────── responsive ───────────── */
+@media (max-width:900px) {
+  #app { grid-template-columns:1fr; }
+  #sidebar { position:fixed; z-index:50; width:280px; left:0; top:0; transform:translateX(-100%); transition:transform .3s; }
+  #sidebar.open { transform:none; box-shadow:0 0 60px rgba(0,0,0,.5); }
+  #menuBtn { display:inline-flex; }
+  #scrim { display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; opacity:0; pointer-events:none; transition:.3s; }
+  #sidebar.open ~ #content #scrim, body:has(#sidebar.open) #scrim { opacity:1; pointer-events:auto; }
+  .grid2 { grid-template-columns:1fr; }
+  .split { grid-template-columns:1fr; }
+}
+@media (max-width:520px) { #main { padding:14px; } .topbar { padding:12px 14px; } .login-card { padding:26px 20px; } }
+
+  </style>
 </head>
 <body>
 
-    <h1>Welcome to My Website</h1>
-    <p>This is a simple paragraph of text written in HTML.</p>
-    
-    <a href="https://wikipedia.org">Click here to visit Wikipedia</a>
+  <!-- ░░ LOGIN ░░ -->
+  <section id="login">
+    <div class="login-card">
+      <div class="logo">හෙ</div>
+      <h1>හෙළ සිරිත · පරිපාලනය</h1>
+      <p class="sub">පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.</p>
 
+      <button id="googleBtn" class="btn g-btn">
+        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.5l-6.5-5.5C29.7 34.6 27 35.5 24 35.5c-5.2 0-9.6-3.3-11.2-7.9l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.5 5.5C40.9 36 44 30.6 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+        Google ගිණුමෙන් පිවිසෙන්න
+      </button>
+
+      <div class="divider-or">නැතහොත්</div>
+
+      <form id="loginForm">
+        <div class="field"><label for="email">ඊමේල්</label><input class="input" id="email" type="email" autocomplete="username" placeholder="gaurawasachintha@gmail.com" /></div>
+        <div class="field"><label for="password">මුරපදය</label><input class="input" id="password" type="password" autocomplete="current-password" /></div>
+        <button id="loginSubmit" class="btn primary" style="width:100%" type="submit">පිවිසෙන්න</button>
+      </form>
+
+      <p class="login-err" id="loginErr"></p>
+      <p class="login-foot"><button class="link-btn" id="forgotBtn" type="button">මුරපදය අමතකද?</button></p>
+    </div>
+  </section>
+
+  <!-- ░░ APP ░░ -->
+  <div id="app" hidden>
+    <aside id="sidebar">
+      <div class="side-brand"><span class="dot"></span> හෙළ සිරිත</div>
+      <nav id="nav"></nav>
+      <div class="side-foot">
+        <div class="whoami" id="whoami"></div>
+        <button id="logoutBtn" class="btn" style="width:100%">පිටවීම (Logout)</button>
+      </div>
+    </aside>
+
+    <div id="content">
+      <header class="topbar">
+        <button id="menuBtn" class="btn ghost" aria-label="මෙනුව">☰</button>
+        <span class="crumb" id="crumb">දළ විශ්ලේෂණය</span>
+        <span class="spacer"></span>
+        <a class="btn ghost sm" href="https://helasiritha.vercel.app" target="_blank" rel="noopener">පොදු අඩවිය ↗</a>
+      </header>
+      <main id="main"></main>
+    </div>
+  </div>
+
+  <div id="scrim"></div>
+
+  <noscript><div style="padding:40px;text-align:center">මෙම පුවරුව භාවිතයට JavaScript අවශ්‍යයි.</div></noscript>
+
+  <script type="module">
+/* helasiritha · single-file bundle (esbuild esm) — generated from the modular source.
+   Edit the source modules then re-bundle, OR edit inline strings/CSS directly. */
+// release/helasiritha-admin/assets/js/firebase-config.js
+var FIREBASE_SDK_VERSION = "12.14.0";
+var SDK_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD2HEO-yoV6RLsD1iYgj_EocItqotAh3Qk",
+  authDomain: "helasiritha-official.firebaseapp.com",
+  projectId: "helasiritha-official",
+  storageBucket: "helasiritha-official.firebasestorage.app",
+  messagingSenderId: "993883662089",
+  appId: "1:993883662089:web:b583123218df07be9155d8",
+  measurementId: "G-PBJWLXWVD9"
+};
+var ADMIN_EMAIL = "gaurawasachintha@gmail.com";
+var CLOUDINARY = {
+  cloudName: "dzrfpc9be",
+  uploadPreset: "helasiritha_unsigned"
+};
+
+// release/helasiritha-admin/assets/js/auth.js
+var { initializeApp } = await import(`${SDK_BASE}/firebase-app.js`);
+var authMod = await import(`${SDK_BASE}/firebase-auth.js`);
+var fs = await import(`${SDK_BASE}/firebase-firestore.js`);
+var app = initializeApp(FIREBASE_CONFIG);
+var auth = authMod.getAuth(app);
+var db = fs.getFirestore(app);
+try {
+  authMod.setPersistence(auth, authMod.browserLocalPersistence);
+} catch (_) {
+}
+function isAdminEmail(email) {
+  return !!email && email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+function watchAuth(onIn, onOut) {
+  authMod.onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      onOut(null);
+      return;
+    }
+    if (!isAdminEmail(user.email)) {
+      await authMod.signOut(auth).catch(() => {
+      });
+      onOut("forbidden");
+      return;
+    }
+    onIn(user);
+  });
+}
+async function signIn(email, password) {
+  if (!isAdminEmail(email)) {
+    const e = new Error("forbidden");
+    e.code = "auth/not-admin";
+    throw e;
+  }
+  return authMod.signInWithEmailAndPassword(auth, email.trim(), password);
+}
+async function signInWithGoogle() {
+  const provider = new authMod.GoogleAuthProvider();
+  provider.setCustomParameters({ login_hint: ADMIN_EMAIL, prompt: "select_account" });
+  const cred = await authMod.signInWithPopup(auth, provider);
+  if (!isAdminEmail(cred.user?.email)) {
+    await authMod.signOut(auth).catch(() => {
+    });
+    const e = new Error("forbidden");
+    e.code = "auth/not-admin";
+    throw e;
+  }
+  return cred;
+}
+async function resetPassword(email) {
+  if (!isAdminEmail(email)) {
+    const e = new Error("forbidden");
+    e.code = "auth/not-admin";
+    throw e;
+  }
+  return authMod.sendPasswordResetEmail(auth, email.trim());
+}
+async function signOutAdmin() {
+  return authMod.signOut(auth);
+}
+function authErrorSi(code) {
+  const m = {
+    "auth/not-admin": "මෙම පද්ධතියට පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.",
+    "auth/invalid-credential": "ඊමේල් හෝ මුරපදය වැරදියි.",
+    "auth/invalid-email": "ඊමේල් ලිපිනය වලංගු නැත.",
+    "auth/user-not-found": "එවැනි ගිණුමක් හමු නොවීය.",
+    "auth/wrong-password": "මුරපදය වැරදියි.",
+    "auth/popup-closed-by-user": "පිවිසුම් කවුළුව වසා දමා ඇත.",
+    "auth/popup-blocked": "පිවිසුම් කවුළුව බ්‍රවුසරය විසින් අවහිර කර ඇත.",
+    "auth/too-many-requests": "උත්සාහයන් වැඩියි. මඳක් පසුව නැවත උත්සාහ කරන්න.",
+    "auth/network-request-failed": "අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.",
+    "auth/unauthorized-domain": "මෙම වසම Firebase Auth හි අවසර ලත් වසම් අතර නැත."
+  };
+  return m[code] || "පිවිසීමේ දෝෂයක්. නැවත උත්සාහ කරන්න.";
+}
+
+// release/helasiritha-admin/assets/js/store.js
+var {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  orderBy,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+  serverTimestamp
+} = fs;
+var listeners = /* @__PURE__ */ new Set();
+var S = {
+  ready: false,
+  guests: [],
+  rsvps: [],
+  rsvpMap: {},
+  blessings: [],
+  agenda: [],
+  gallery: [],
+  budget: [],
+  billing: [],
+  site: {},
+  theme: {},
+  visibility: {},
+  stats: {}
+};
+function onChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function emit() {
+  listeners.forEach((f) => f(S));
+}
+function mergedGuests() {
+  return S.guests.map((g) => {
+    const r = S.rsvpMap[g.id];
+    return {
+      ...g,
+      status: r?.status || g.status || "pending",
+      takingLiquor: r ? !!r.takingLiquor : !!g.takingLiquor,
+      partySize: r?.partySize || 1,
+      dietary: r?.dietary || g.dietary || "",
+      respondedAt: r?.respondedAt || g.respondedAt || null
+    };
+  });
+}
+function buildSearchTokens(...parts) {
+  const cleaned = parts.join(" ").toLowerCase().normalize("NFC").replace(/[\u200b-\u200d\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+  const whole = cleaned.replace(/\s/g, "");
+  return Array.from(/* @__PURE__ */ new Set([cleaned, whole, ...cleaned.split(" ")])).filter(Boolean);
+}
+function startAdminRealtime() {
+  onSnapshot(doc(db, "config", "site"), (s) => {
+    S.site = s.exists() ? s.data() : {};
+    emit();
+  });
+  onSnapshot(doc(db, "config", "theme"), (s) => {
+    S.theme = s.exists() ? s.data() : {};
+    emit();
+  });
+  onSnapshot(doc(db, "config", "visibility"), (s) => {
+    S.visibility = s.exists() ? s.data() : {};
+    emit();
+  });
+  onSnapshot(doc(db, "config", "stats"), (s) => {
+    S.stats = s.exists() ? s.data() : {};
+    emit();
+  });
+  onSnapshot(collection(db, "guests"), (snap) => {
+    S.guests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    S.ready = true;
+    emit();
+    scheduleStats();
+  });
+  onSnapshot(collection(db, "rsvps"), (snap) => {
+    S.rsvps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    S.rsvpMap = Object.fromEntries(S.rsvps.map((r) => [r.guestId || r.id, r]));
+    emit();
+    scheduleStats();
+  });
+  onSnapshot(query(collection(db, "agenda"), orderBy("order", "asc")), (snap) => {
+    S.agenda = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    emit();
+  });
+  onSnapshot(query(collection(db, "gallery"), orderBy("order", "asc")), (snap) => {
+    S.gallery = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    emit();
+  });
+  onSnapshot(collection(db, "blessings"), (snap) => {
+    S.blessings = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    emit();
+  });
+  onSnapshot(collection(db, "budget"), (snap) => {
+    S.budget = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    emit();
+  });
+  onSnapshot(collection(db, "billing"), (snap) => {
+    S.billing = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    emit();
+  });
+}
+var statsTimer = null;
+function scheduleStats() {
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(recomputeStats, 1200);
+}
+async function recomputeStats() {
+  const m = mergedGuests();
+  const next = {
+    totalGuests: m.length,
+    confirmed: m.filter((g) => g.status === "confirmed").length,
+    pending: m.filter((g) => g.status === "pending").length,
+    declined: m.filter((g) => g.status === "declined").length,
+    updatedAt: Date.now()
+  };
+  const cur = S.stats || {};
+  if (cur.totalGuests === next.totalGuests && cur.confirmed === next.confirmed && cur.pending === next.pending && cur.declined === next.declined) return;
+  try {
+    await setDoc(doc(db, "config", "stats"), next, { merge: true });
+  } catch (_) {
+  }
+}
+var saveSite = (data) => setDoc(doc(db, "config", "site"), { ...data, updatedAt: Date.now() }, { merge: true });
+var saveTheme = (data) => setDoc(doc(db, "config", "theme"), { ...data, updatedAt: Date.now() }, { merge: true });
+var saveVisibility = (data) => setDoc(doc(db, "config", "visibility"), { ...data, updatedAt: Date.now() }, { merge: true });
+async function addGuest({ name, familyName, side }) {
+  const g = {
+    name: name.trim(),
+    familyName: (familyName || "").trim(),
+    side: side === "bride" ? "bride" : "groom",
+    searchTokens: buildSearchTokens(name, familyName),
+    status: "pending",
+    takingLiquor: false,
+    tableNumber: null,
+    plusOnes: 0,
+    dietary: "",
+    respondedAt: null,
+    createdAt: Date.now()
+  };
+  return addDoc(collection(db, "guests"), g);
+}
+async function addGuestsBulk(rows) {
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += 400) chunks.push(rows.slice(i, i + 400));
+  let n = 0;
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    chunk.forEach((r) => {
+      const ref = doc(collection(db, "guests"));
+      batch.set(ref, {
+        name: r.name.trim(),
+        familyName: (r.familyName || "").trim(),
+        side: r.side === "bride" ? "bride" : "groom",
+        searchTokens: buildSearchTokens(r.name, r.familyName),
+        status: "pending",
+        takingLiquor: false,
+        tableNumber: null,
+        plusOnes: 0,
+        dietary: "",
+        respondedAt: null,
+        createdAt: Date.now()
+      });
+      n++;
+    });
+    await batch.commit();
+  }
+  return n;
+}
+var deleteGuest = (id) => deleteDoc(doc(db, "guests", id));
+var setGuestTable = (id, tableNumber) => updateDoc(doc(db, "guests", id), { tableNumber: tableNumber === "" || tableNumber == null ? null : Number(tableNumber) });
+async function upsertRsvp(guestId, patch) {
+  const g = S.guests.find((x) => x.id === guestId) || {};
+  return setDoc(doc(db, "rsvps", guestId), {
+    guestId,
+    guestName: g.name || "",
+    side: g.side || "groom",
+    ...patch,
+    respondedAt: Date.now()
+  }, { merge: true });
+}
+var setGuestStatus = (id, status) => upsertRsvp(id, { status });
+var setGuestLiquor = (id, takingLiquor) => upsertRsvp(id, { takingLiquor: !!takingLiquor });
+var addAgenda = (e) => addDoc(collection(db, "agenda"), { ...e, createdAt: Date.now() });
+var updateAgenda = (id, patch) => updateDoc(doc(db, "agenda", id), patch);
+var deleteAgenda = (id) => deleteDoc(doc(db, "agenda", id));
+var addGallery = (img) => addDoc(collection(db, "gallery"), { ...img, createdAt: Date.now() });
+var deleteGallery = (id) => deleteDoc(doc(db, "gallery", id));
+var addBudget = (b) => addDoc(collection(db, "budget"), { ...b, createdAt: Date.now() });
+var deleteBudget = (id) => deleteDoc(doc(db, "budget", id));
+var addBilling = (b) => addDoc(collection(db, "billing"), { ...b, createdAt: Date.now() });
+var updateBilling = (id, patch) => updateDoc(doc(db, "billing", id), patch);
+var deleteBilling = (id) => deleteDoc(doc(db, "billing", id));
+var approveBlessing = (id, approved) => updateDoc(doc(db, "blessings", id), { approved: !!approved });
+var deleteBlessing = (id) => deleteDoc(doc(db, "blessings", id));
+async function uploadToCloudinary(file, onProgress) {
+  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`;
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", CLOUDINARY.uploadPreset);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+    };
+    xhr.onload = () => {
+      try {
+        const res = JSON.parse(xhr.responseText);
+        if (res.secure_url) resolve(res);
+        else reject(new Error(res.error?.message || "upload failed"));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    xhr.onerror = () => reject(new Error("network error"));
+    xhr.send(fd);
+  });
+}
+
+// release/helasiritha-admin/assets/js/modules.js
+var S2 = S;
+var $ = (s, r = document) => r.querySelector(s);
+var $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+var money = (n) => "රු. " + (Number(n) || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+var toastTimer;
+function toast(msg, kind = "ok") {
+  let t = $("#toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    document.body.appendChild(t);
+  }
+  t.className = "toast show " + kind;
+  t.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function confirmAct(msg) {
+  return window.confirm(msg);
+}
+var LIVE = /* @__PURE__ */ new Set(["dashboard", "groomGuests", "brideGuests", "confirmed", "pending", "notComing", "changeState", "seating", "liquor", "gallery", "blessings", "budget", "billing"]);
+var MODULES = [
+  { key: "dashboard", label: "දළ විශ්ලේෂණය", icon: "grid", group: "මුල් පිටුව" },
+  { key: "weddingDetails", label: "මංගල තොරතුරු", icon: "ring", group: "මුල් පිටුව" },
+  { key: "addGuests", label: "ආගන්තුකයන් එක් කිරීම", icon: "plus", group: "ආගන්තුකයෝ" },
+  { key: "groomGuests", label: "ගෞරවගේ ආගන්තුකයෝ", icon: "man", group: "ආගන්තුකයෝ" },
+  { key: "brideGuests", label: "කෞශානිගේ ආගන්තුකයෝ", icon: "woman", group: "ආගන්තුකයෝ" },
+  { key: "confirmed", label: "පැමිණීම තහවුරු", icon: "check", group: "පිළිතුරු" },
+  { key: "pending", label: "පිළිතුරු නොලත්", icon: "clock", group: "පිළිතුරු" },
+  { key: "notComing", label: "නොපැමිණෙන", icon: "x", group: "පිළිතුරු" },
+  { key: "changeState", label: "තත්ත්වය වෙනස් කිරීම", icon: "swap", group: "පිළිතුරු" },
+  { key: "seating", label: "මේස වෙන් කිරීම", icon: "table", group: "සැලසුම්" },
+  { key: "liquor", label: "මත්පැන් ගණන", icon: "cup", group: "සැලසුම්" },
+  { key: "agenda", label: "වැඩසටහන සැකසීම", icon: "list", group: "සැලසුම්" },
+  { key: "gallery", label: "ඡායාරූප එකතුව", icon: "image", group: "පෙනුම" },
+  { key: "theme", label: "වර්ණ සැකසුම්", icon: "paint", group: "පෙනුම" },
+  { key: "visibility", label: "කොටස් පෙන්වීම/සැඟවීම", icon: "eye", group: "පෙනුම" },
+  { key: "blessings", label: "සුබ පැතුම් අනුමැතිය", icon: "heart", group: "පෙනුම" },
+  { key: "budget", label: "අයවැය ගණනය", icon: "calc", group: "මූල්‍ය" },
+  { key: "billing", label: "බිල්පත් හා ගෙවීම්", icon: "card", group: "මූල්‍ය" },
+  { key: "qr", label: "QR කේතය", icon: "qr", group: "මූල්‍ය" }
+];
+function renderModule(key, host) {
+  const fn = {
+    dashboard,
+    weddingDetails,
+    addGuests,
+    groomGuests,
+    brideGuests,
+    confirmed,
+    pending,
+    notComing,
+    changeState,
+    seating,
+    liquor,
+    agenda,
+    gallery,
+    theme,
+    visibility,
+    blessings,
+    budget,
+    billing,
+    qr
+  }[key] || dashboard;
+  host.innerHTML = "";
+  fn(host);
+}
+function head(host, title, sub) {
+  const h = document.createElement("div");
+  h.className = "mod-head";
+  h.innerHTML = `<h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ""}`;
+  host.appendChild(h);
+  return host;
+}
+function card(html, cls = "") {
+  const d = document.createElement("div");
+  d.className = "panel " + cls;
+  d.innerHTML = html;
+  return d;
+}
+function dashboard(host) {
+  head(host, "දළ විශ්ලේෂණය", "පද්ධතියේ සජීවී තත්ත්වය");
+  const m = mergedGuests();
+  const groom = m.filter((g) => g.side === "groom"), bride = m.filter((g) => g.side === "bride");
+  const by = (arr, s) => arr.filter((g) => g.status === s).length;
+  const liquorYes = m.filter((g) => g.status === "confirmed" && g.takingLiquor).length;
+  const heads = m.filter((g) => g.status === "confirmed").reduce((a, g) => a + (g.partySize || 1), 0);
+  const stat = (n, l, cls = "") => `<div class="stat ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const grid = card(`
+    <div class="stat-grid">
+      ${stat(m.length, "මුළු ආගන්තුකයෝ")}
+      ${stat(by(m, "confirmed"), "තහවුරු", "ok")}
+      ${stat(by(m, "pending"), "පොරොත්තුවෙන්", "warn")}
+      ${stat(by(m, "declined"), "නොපැමිණෙන", "bad")}
+      ${stat(heads, "පැමිණෙන මුළු හිස් ගණන")}
+      ${stat(liquorYes, "මත්පැන් අවශ්‍ය")}
+    </div>`);
+  host.appendChild(grid);
+  const split = card(`
+    <h3>පාර්ශව අනුව</h3>
+    <div class="split">
+      <div class="split-col">
+        <div class="split-name">ගෞරව (මනාලයා)</div>
+        <div class="split-row"><span>මුළු</span><b>${groom.length}</b></div>
+        <div class="split-row"><span>තහවුරු</span><b>${by(groom, "confirmed")}</b></div>
+        <div class="split-row"><span>පොරොත්තු</span><b>${by(groom, "pending")}</b></div>
+        <div class="split-row"><span>නොපැමිණෙන</span><b>${by(groom, "declined")}</b></div>
+      </div>
+      <div class="split-col">
+        <div class="split-name">කෞශානි (මනාලිය)</div>
+        <div class="split-row"><span>මුළු</span><b>${bride.length}</b></div>
+        <div class="split-row"><span>තහවුරු</span><b>${by(bride, "confirmed")}</b></div>
+        <div class="split-row"><span>පොරොත්තු</span><b>${by(bride, "pending")}</b></div>
+        <div class="split-row"><span>නොපැමිණෙන</span><b>${by(bride, "declined")}</b></div>
+      </div>
+    </div>`);
+  host.appendChild(split);
+  const recent = [...m].filter((g) => g.respondedAt).sort((a, b) => (b.respondedAt || 0) - (a.respondedAt || 0)).slice(0, 8);
+  const rec = card(`
+    <div class="panel-head"><h3>නවතම පිළිතුරු</h3>
+      <button class="btn sm" id="syncBtn">මංගල පහනේ ගණන යළි ගණනය</button></div>
+    ${recent.length ? `<table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>මත්පැන්</th></tr></thead><tbody>
+      ${recent.map((g) => `<tr><td>${esc(g.name)}</td><td>${g.side === "bride" ? "කෞශානි" : "ගෞරව"}</td>
+        <td>${statusChip(g.status)}</td><td>${g.takingLiquor ? "ඔව්" : "නැහැ"}</td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">තවම පිළිතුරු නැත.</p>`}`);
+  host.appendChild(rec);
+  $("#syncBtn").onclick = async () => {
+    await recomputeStats();
+    toast("මංගල පහනේ ගණන යාවත්කාලීන විය ✓");
+  };
+}
+function statusChip(s) {
+  const map = { confirmed: ["තහවුරු", "ok"], pending: ["පොරොත්තු", "warn"], declined: ["නොපැමිණේ", "bad"] };
+  const [t, c] = map[s] || map.pending;
+  return `<span class="chip ${c}">${t}</span>`;
+}
+function weddingDetails(host) {
+  head(host, "මංගල තොරතුරු", "පොදු වෙබ් අඩවියේ දිස්වන මූලික තොරතුරු");
+  const s = S2.site || {};
+  const f = (id, label, val = "", type = "text") => `
+    <div class="field"><label>${label}</label><input class="input" id="${id}" type="${type}" value="${esc(val)}"></div>`;
+  const ta = (id, label, val = "") => `<div class="field"><label>${label}</label><textarea class="input" id="${id}" rows="3">${esc(val)}</textarea></div>`;
+  const chk = (id, label, val) => `<label class="switch"><input type="checkbox" id="${id}" ${val ? "checked" : ""}><span></span>${label}</label>`;
+  const p = card(`
+    <div class="grid2">
+      ${f("wd_groomSi", "මනාලයාගේ නම (සිංහල)", s.groomNameSi || "ගෞරව")}
+      ${f("wd_brideSi", "මනාලියගේ නම (සිංහල)", s.brideNameSi || "කෞශානි")}
+      ${f("wd_groomEn", "මනාලයාගේ නම (English)", s.groomNameEn || "Gaurawa")}
+      ${f("wd_brideEn", "මනාලියගේ නම (English)", s.brideNameEn || "Kaushani")}
+      ${f("wd_groomParents", "මනාලයාගේ දෙමාපියන් / පෙළපත", s.groomParentsSi || "")}
+      ${f("wd_brideParents", "මනාලියගේ දෙමාපියන් / පෙළපත", s.brideParentsSi || "")}
+      ${f("wd_date", "මංගල දිනය හා වේලාව (ISO)", s.weddingDateISO || "2028-01-12T09:15:00+05:30")}
+      ${f("wd_time", "උත්සව වේලා සටහන", s.ceremonyTimeLabel || "පෙ.ව. 9.15 සිට")}
+      ${f("wd_venue", "ස්ථානයේ නම", s.venueName || "")}
+      ${f("wd_addr", "ලිපිනය", s.venueAddress || "")}
+      ${f("wd_map", "Google Maps සබැඳිය", s.mapUrl || "")}
+      ${f("wd_wa", "WhatsApp/දුරකථන (94…)", s.whatsappNumber || "94705367980")}
+      ${f("wd_deadline", "පිළිතුරු දිය යුතු අවසන් දිනය (ISO)", s.rsvpDeadlineISO || "")}
+      ${f("wd_audio", "පසුබිම් සංගීත URL (Cloudinary, විකල්ප)", s.ambientAudioUrl || "")}
+    </div>
+    ${ta("wd_invite", "ආරාධනා වදන් (සිංහල)", s.inviteWordingSi || "")}
+    ${ta("wd_love", "විශේෂ සටහන (සිංහල)", s.loveNoteSi || "")}
+    <div class="row">
+      ${chk("wd_liquor", "මත්පැන් කැමැත්ත අසන්න", s.allowLiquorPref !== false)}
+      ${chk("wd_diet", "ආහාර අවශ්‍යතා අසන්න", s.allowDietaryPref !== false)}
+    </div>
+    <button class="btn primary" id="wdSave">තොරතුරු සුරකින්න</button>
+  `);
+  host.appendChild(p);
+  $("#wdSave").onclick = async () => {
+    const data = {
+      groomNameSi: $("#wd_groomSi").value,
+      brideNameSi: $("#wd_brideSi").value,
+      groomNameEn: $("#wd_groomEn").value,
+      brideNameEn: $("#wd_brideEn").value,
+      groomParentsSi: $("#wd_groomParents").value,
+      brideParentsSi: $("#wd_brideParents").value,
+      weddingDateISO: $("#wd_date").value,
+      ceremonyTimeLabel: $("#wd_time").value,
+      venueName: $("#wd_venue").value,
+      venueAddress: $("#wd_addr").value,
+      mapUrl: $("#wd_map").value,
+      whatsappNumber: $("#wd_wa").value,
+      rsvpDeadlineISO: $("#wd_deadline").value,
+      ambientAudioUrl: $("#wd_audio").value,
+      inviteWordingSi: $("#wd_invite").value,
+      loveNoteSi: $("#wd_love").value,
+      allowLiquorPref: $("#wd_liquor").checked,
+      allowDietaryPref: $("#wd_diet").checked
+    };
+    try {
+      await saveSite(data);
+      toast("මංගල තොරතුරු සුරැකිණි ✓");
+    } catch (e) {
+      toast("සුරැකීම අසාර්ථකයි: " + e.message, "bad");
+    }
+  };
+}
+function addGuests(host) {
+  head(host, "ආගන්තුකයන් එක් කිරීම", "තනි තනිව හෝ ලැයිස්තුවක් වශයෙන්");
+  const one = card(`
+    <h3>තනි ආගන්තුකයෙක්</h3>
+    <div class="grid2">
+      <div class="field"><label>නම</label><input class="input" id="ag_name"></div>
+      <div class="field"><label>පවුලේ නාමය</label><input class="input" id="ag_fam"></div>
+    </div>
+    <div class="field"><label>පාර්ශවය</label>
+      <select class="input" id="ag_side"><option value="groom">ගෞරව (මනාලයා)</option><option value="bride">කෞශානි (මනාලිය)</option></select></div>
+    <button class="btn primary" id="ag_add">එක් කරන්න</button>
+  `);
+  host.appendChild(one);
+  $("#ag_add").onclick = async () => {
+    const name = $("#ag_name").value.trim();
+    if (!name) {
+      toast("නම ඇතුළත් කරන්න", "warn");
+      return;
+    }
+    await addGuest({ name, familyName: $("#ag_fam").value, side: $("#ag_side").value });
+    $("#ag_name").value = "";
+    $("#ag_fam").value = "";
+    toast("ආගන්තුකයා එක් කෙරිණි ✓");
+  };
+  const bulk = card(`
+    <h3>ලැයිස්තුවක් (එක් පේළියකට එක් අයෙක්)</h3>
+    <p class="muted">ආකෘතිය: <code>නම, පවුලේ නාමය</code> — Excel/Sheets වෙතින් කෙලින්ම අලවන්නත් පුළුවන්.</p>
+    <div class="field"><label>පාර්ශවය</label>
+      <select class="input" id="bk_side"><option value="groom">ගෞරව (මනාලයා)</option><option value="bride">කෞශානි (මනාලිය)</option></select></div>
+    <textarea class="input" id="bk_text" rows="8" placeholder="සුනිල් පෙරේරා, පෙරේරා පවුල&#10;නිමල් සිල්වා, සිල්වා පවුල"></textarea>
+    <button class="btn primary" id="bk_add">ලැයිස්තුව එක් කරන්න</button>
+  `);
+  host.appendChild(bulk);
+  $("#bk_add").onclick = async () => {
+    const side = $("#bk_side").value;
+    const rows = $("#bk_text").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+      const parts = l.split(/[,\t]/).map((x) => x.trim());
+      return { name: parts[0], familyName: parts[1] || "", side };
+    }).filter((r) => r.name);
+    if (!rows.length) {
+      toast("කිසිවක් හමු නොවීය", "warn");
+      return;
+    }
+    const btn = $("#bk_add");
+    btn.disabled = true;
+    btn.textContent = "එක් කරමින්…";
+    try {
+      const n = await addGuestsBulk(rows);
+      $("#bk_text").value = "";
+      toast(`ආගන්තුකයෝ ${n} දෙනෙක් එක් කෙරිණි ✓`);
+    } catch (e) {
+      toast("දෝෂයක්: " + e.message, "bad");
+    }
+    btn.disabled = false;
+    btn.textContent = "ලැයිස්තුව එක් කරන්න";
+  };
+}
+function guestTable(host, filterFn, opts = {}) {
+  const m = mergedGuests().filter(filterFn).sort((a, b) => a.name.localeCompare(b.name, "si"));
+  const wrap = card(`
+    <div class="panel-head">
+      <h3>${esc(opts.title || "ආගන්තුකයෝ")}</h3>
+      <input class="input sm-input" id="gtSearch" placeholder="සොයන්න…">
+    </div>
+    <div class="tbl-scroll">
+    <table class="tbl"><thead><tr>
+      <th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>තත්ත්වය</th>
+      ${opts.table ? "<th>මේසය</th>" : ""}${opts.liquor ? "<th>මත්පැන්</th>" : ""}<th></th>
+    </tr></thead><tbody id="gtBody"></tbody></table></div>
+    <p class="muted" id="gtCount"></p>
+  `);
+  host.appendChild(wrap);
+  const body = $("#gtBody", wrap), search = $("#gtSearch", wrap), count = $("#gtCount", wrap);
+  function draw(list) {
+    body.innerHTML = list.map((g) => `
+      <tr data-id="${g.id}">
+        <td>${esc(g.name)}</td>
+        <td>${esc(g.familyName)}</td>
+        <td>${g.side === "bride" ? "කෞශානි" : "ගෞරව"}</td>
+        <td>
+          <select class="mini st" data-id="${g.id}">
+            <option value="pending" ${g.status === "pending" ? "selected" : ""}>පොරොත්තු</option>
+            <option value="confirmed" ${g.status === "confirmed" ? "selected" : ""}>තහවුරු</option>
+            <option value="declined" ${g.status === "declined" ? "selected" : ""}>නොපැමිණේ</option>
+          </select>
+        </td>
+        ${opts.table ? `<td><input class="mini tn" data-id="${g.id}" type="number" min="1" value="${g.tableNumber ?? ""}" style="width:64px"></td>` : ""}
+        ${opts.liquor ? `<td><input type="checkbox" class="lq" data-id="${g.id}" ${g.takingLiquor ? "checked" : ""}></td>` : ""}
+        <td><button class="btn xs danger del" data-id="${g.id}">මකන්න</button></td>
+      </tr>`).join("");
+    count.textContent = `මුළු: ${list.length}`;
+    $$(".st", body).forEach((sel) => sel.onchange = () => setGuestStatus(sel.dataset.id, sel.value).then(() => toast("තත්ත්වය යාවත්කාලීනයි")));
+    $$(".tn", body).forEach((inp) => inp.onchange = () => setGuestTable(inp.dataset.id, inp.value).then(() => toast("මේසය යාවත්කාලීනයි")));
+    $$(".lq", body).forEach((c) => c.onchange = () => setGuestLiquor(c.dataset.id, c.checked).then(() => toast("යාවත්කාලීනයි")));
+    $$(".del", body).forEach((b) => b.onclick = () => {
+      if (confirmAct("මෙම ආගන්තුකයා මකන්නද?")) deleteGuest(b.dataset.id).then(() => toast("මකා දැමිණි"));
+    });
+  }
+  const apply = () => {
+    const q = search.value.trim().toLowerCase();
+    draw(q ? m.filter((g) => (g.name + " " + g.familyName).toLowerCase().includes(q)) : m);
+  };
+  search.oninput = apply;
+  draw(m);
+}
+function groomGuests(host) {
+  head(host, "ගෞරවගේ ආගන්තුකයෝ", "මනාලයාගේ පාර්ශවය");
+  guestTable(host, (g) => g.side === "groom", { title: "මනාලයාගේ ආගන්තුකයෝ", table: true, liquor: true });
+}
+function brideGuests(host) {
+  head(host, "කෞශානිගේ ආගන්තුකයෝ", "මනාලියගේ පාර්ශවය");
+  guestTable(host, (g) => g.side === "bride", { title: "මනාලියගේ ආගන්තුකයෝ", table: true, liquor: true });
+}
+function confirmed(host) {
+  head(host, "පැමිණීම තහවුරු", "පැමිණෙන බව තහවුරු කළ අය");
+  guestTable(host, (g) => g.status === "confirmed", { title: "තහවුරු වූ අය", table: true, liquor: true });
+}
+function pending(host) {
+  head(host, "පිළිතුරු නොලත්", "තවම පිළිතුරු නොදුන් අය");
+  guestTable(host, (g) => g.status === "pending", { title: "පොරොත්තුවෙන්" });
+}
+function notComing(host) {
+  head(host, "නොපැමිණෙන", "පැමිණිය නොහැකි බව දැනුම් දුන් අය");
+  guestTable(host, (g) => g.status === "declined", { title: "නොපැමිණෙන අය" });
+}
+function changeState(host) {
+  head(host, "තත්ත්වය වෙනස් කිරීම", "ඕනෑම ආගන්තුකයෙකුගේ පිළිතුර සැකසීම");
+  guestTable(host, () => true, { title: "සියලු ආගන්තුකයෝ", table: true, liquor: true });
+}
+function seating(host) {
+  head(host, "මේස වෙන් කිරීම", "ආගන්තුකයන්ට මේස අංක ලබා දෙන්න");
+  guestTable(host, (g) => g.status !== "declined", { title: "මේස වෙන් කිරීම", table: true });
+}
+function liquor(host) {
+  head(host, "මත්පැන් ගණන", "තහවුරු වූ අය අතර මත්පැන් අවශ්‍ය ගණන");
+  const m = mergedGuests().filter((g) => g.status === "confirmed");
+  const yes = m.filter((g) => g.takingLiquor);
+  const stat = (n, l, c = "") => `<div class="stat ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  host.appendChild(card(`<div class="stat-grid">
+    ${stat(yes.length, "මත්පැන් අවශ්‍ය", "ok")}
+    ${stat(m.length - yes.length, "අවශ්‍ය නැත")}
+    ${stat(m.length, "මුළු තහවුරු")}
+  </div>`));
+  guestTable(host, (g) => g.status === "confirmed", { title: "තහවුරු වූ අයගේ මත්පැන් කැමැත්ත", liquor: true });
+}
+var AGENDA_ICONS = ["poruwa", "lamp", "lotus", "sesath", "mandala", "mayura", "ring", "feast"];
+function agenda(host) {
+  head(host, "වැඩසටහන සැකසීම", "මංගල දිනයේ වැඩසටහන් පෙළගැස්ම");
+  const add = card(`
+    <h3>නව අයිතමයක්</h3>
+    <div class="grid2">
+      <div class="field"><label>වේලාව</label><input class="input" id="ag_time" placeholder="පෙ.ව. 9.15"></div>
+      <div class="field"><label>මාතෘකාව</label><input class="input" id="ag_title" placeholder="පෝරුව මංගල්‍යය"></div>
+    </div>
+    <div class="field"><label>විස්තරය</label><textarea class="input" id="ag_desc" rows="2"></textarea></div>
+    <div class="grid2">
+      <div class="field"><label>අයිකනය</label><select class="input" id="ag_icon">${AGENDA_ICONS.map((i) => `<option value="${i}">${i}</option>`).join("")}</select></div>
+      <div class="field"><label>අනුපිළිවෙළ</label><input class="input" id="ag_order" type="number" value="${S2.agenda.length + 1}"></div>
+    </div>
+    <button class="btn primary" id="ag_save">අයිතමය එක් කරන්න</button>
+  `);
+  host.appendChild(add);
+  $("#ag_save").onclick = async () => {
+    const titleSi = $("#ag_title").value.trim();
+    if (!titleSi) {
+      toast("මාතෘකාව ඇතුළත් කරන්න", "warn");
+      return;
+    }
+    await addAgenda({ timeLabel: $("#ag_time").value, titleSi, descSi: $("#ag_desc").value, icon: $("#ag_icon").value, order: Number($("#ag_order").value) || 1, visible: true });
+    $("#ag_title").value = "";
+    $("#ag_desc").value = "";
+    $("#ag_time").value = "";
+    toast("අයිතමය එක් කෙරිණි ✓");
+  };
+  const list = card(`<h3>දැනට ඇති අයිතම</h3><div id="agList"></div>`);
+  host.appendChild(list);
+  const lst = $("#agList", list);
+  const items = [...S2.agenda].sort((a, b) => (a.order || 0) - (b.order || 0));
+  lst.innerHTML = items.length ? items.map((e) => `
+    <div class="line">
+      <div><b>${esc(e.timeLabel || "")}</b> · ${esc(e.titleSi || "")} <span class="muted">(${esc(e.icon || "")})</span><br><span class="muted">${esc(e.descSi || "")}</span></div>
+      <div class="line-actions">
+        <button class="btn xs ${e.visible === false ? "" : "ghost"} vis" data-id="${e.id}" data-v="${e.visible === false ? 1 : 0}">${e.visible === false ? "පෙන්වන්න" : "සඟවන්න"}</button>
+        <button class="btn xs danger del" data-id="${e.id}">මකන්න</button>
+      </div>
+    </div>`).join("") : `<p class="muted">තවම අයිතම නැත.</p>`;
+  $$(".vis", lst).forEach((b) => b.onclick = () => updateAgenda(b.dataset.id, { visible: b.dataset.v === "1" }).then(() => toast("යාවත්කාලීනයි")));
+  $$(".del", lst).forEach((b) => b.onclick = () => {
+    if (confirmAct("මෙම අයිතමය මකන්නද?")) deleteAgenda(b.dataset.id).then(() => toast("මකා දැමිණි"));
+  });
+}
+function gallery(host) {
+  head(host, "ඡායාරූප එකතුව", "Cloudinary හරහා උඩුගත කරන්න");
+  const up = card(`
+    <h3>නව ඡායාරූප</h3>
+    <input type="file" id="gl_file" accept="image/*" multiple class="input">
+    <div class="progress" id="gl_prog" hidden><div class="bar"></div></div>
+    <p class="muted">උඩුගත කිරීම සඳහා Cloudinary "unsigned preset" එක (<code>helasiritha_unsigned</code>) සෑදිය යුතුය — SETUP.md බලන්න.</p>
+  `);
+  host.appendChild(up);
+  const fileInp = $("#gl_file", up), prog = $("#gl_prog", up), bar = $(".bar", prog);
+  fileInp.onchange = async () => {
+    const files = Array.from(fileInp.files || []);
+    if (!files.length) return;
+    prog.hidden = false;
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const res = await uploadToCloudinary(files[i], (p) => {
+          bar.style.width = p + "%";
+        });
+        await addGallery({ url: res.secure_url, alt: files[i].name, order: S2.gallery.length + i + 1 });
+        toast(`උඩුගත විය (${i + 1}/${files.length}) ✓`);
+      } catch (e) {
+        toast("උඩුගත වීම අසාර්ථකයි: " + e.message, "bad");
+      }
+    }
+    bar.style.width = "0%";
+    prog.hidden = true;
+    fileInp.value = "";
+  };
+  const grid = card(`<h3>එකතුව (${S2.gallery.length})</h3><div class="gal-grid" id="galGrid"></div>`);
+  host.appendChild(grid);
+  const gg = $("#galGrid", grid);
+  gg.innerHTML = S2.gallery.length ? S2.gallery.map((g) => `
+    <div class="gal-cell">
+      <img src="${esc(g.url.replace("/upload/", "/upload/w_300,f_auto,q_auto/"))}" alt="">
+      <button class="btn xs danger del" data-id="${g.id}">මකන්න</button>
+    </div>`).join("") : `<p class="muted">තවම ඡායාරූප නැත.</p>`;
+  $$(".del", gg).forEach((b) => b.onclick = () => {
+    if (confirmAct("මෙම ඡායාරූපය මකන්නද?")) deleteGallery(b.dataset.id).then(() => toast("මකා දැමිණි"));
+  });
+}
+var PRESETS = {
+  "පාරම්පරික රන්වන්": { primary: "#C9A574", secondary: "#F2E5C6", accent: "#A48354", surface: "#FFFBF2", text: "#221C01" },
+  "මැණික් රතු": { primary: "#C8A24B", secondary: "#F6E4C9", accent: "#8E2C2C", surface: "#FFF8EE", text: "#2B1208" },
+  "නෙළුම් රෝස": { primary: "#C99", secondary: "#F7E9EC", accent: "#9C5B72", surface: "#FFF8F6", text: "#2A1822" },
+  "මොණර නිල්": { primary: "#C9A574", secondary: "#E7E0CC", accent: "#23607A", surface: "#FBFAF4", text: "#10222A" }
+};
+function theme(host) {
+  head(host, "වර්ණ සැකසුම්", "පොදු වෙබ් අඩවියේ වර්ණ — සජීවීව වෙනස් වේ");
+  const t = { primary: "#C9A574", secondary: "#F2E5C6", accent: "#A48354", surface: "#FFFBF2", text: "#221C01", ...S2.theme };
+  const cf = (id, label, val) => `<div class="field"><label>${label}</label><div class="color-row"><input type="color" id="${id}" value="${val}"><input class="input" id="${id}_t" value="${val}"></div></div>`;
+  const p = card(`
+    <div class="field"><label>සූදානම් වර්ණ සැලසුම්</label><div class="preset-row" id="presets">
+      ${Object.keys(PRESETS).map((k) => `<button class="btn xs ghost" data-k="${esc(k)}">${esc(k)}</button>`).join("")}
+    </div></div>
+    <div class="grid2">
+      ${cf("th_primary", "මූලික (රන්වන්)", t.primary)}
+      ${cf("th_secondary", "ද්විතීයික (ක්‍රීම්)", t.secondary)}
+      ${cf("th_accent", "අවධාරක", t.accent)}
+      ${cf("th_surface", "පසුබිම/කාඩ්", t.surface)}
+      ${cf("th_text", "අකුරු", t.text)}
+    </div>
+    <button class="btn primary" id="th_save">වර්ණ සුරකින්න</button>
+  `);
+  host.appendChild(p);
+  const ids = ["th_primary", "th_secondary", "th_accent", "th_surface", "th_text"];
+  ids.forEach((id) => {
+    const c = $("#" + id), tx = $("#" + id + "_t");
+    c.oninput = () => {
+      tx.value = c.value;
+    };
+    tx.oninput = () => {
+      if (/^#[0-9a-fA-F]{6}$/.test(tx.value)) c.value = tx.value;
+    };
+  });
+  $$("#presets button").forEach((b) => b.onclick = () => {
+    const pr = PRESETS[b.dataset.k];
+    if (!pr) return;
+    $("#th_primary").value = pr.primary;
+    $("#th_primary_t").value = pr.primary;
+    $("#th_secondary").value = pr.secondary;
+    $("#th_secondary_t").value = pr.secondary;
+    $("#th_accent").value = pr.accent;
+    $("#th_accent_t").value = pr.accent;
+    $("#th_surface").value = pr.surface;
+    $("#th_surface_t").value = pr.surface;
+    $("#th_text").value = pr.text;
+    $("#th_text_t").value = pr.text;
+  });
+  $("#th_save").onclick = async () => {
+    await saveTheme({ primary: $("#th_primary").value, secondary: $("#th_secondary").value, accent: $("#th_accent").value, surface: $("#th_surface").value, text: $("#th_text").value });
+    toast("වර්ණ සුරැකිණි — පොදු අඩවියේ සජීවීව වෙනස් වේ ✓");
+  };
+}
+var VIS_FIELDS = [
+  ["invitationCard", "ආරාධනා කාඩ්පත"],
+  ["countdown", "ගණන් කිරීම"],
+  ["rsvp", "පැමිණීම තහවුරු"],
+  ["seating", "අසුන් සෙවීම"],
+  ["agenda", "වැඩසටහන"],
+  ["gallery", "ඡායාරූප"],
+  ["blessings", "සුබ පැතුම් පොත"],
+  ["loveNote", "විශේෂ සටහන"]
+];
+function visibility(host) {
+  head(host, "කොටස් පෙන්වීම / සැඟවීම", "පොදු වෙබ් අඩවියේ කුමන කොටස් පෙන්වයිද");
+  const v = S2.visibility || {};
+  const p = card(`${VIS_FIELDS.map(([k, l]) => `
+    <label class="switch big"><input type="checkbox" id="vis_${k}" ${v[k] !== false ? "checked" : ""}><span></span>${l}</label>`).join("")}
+    <button class="btn primary" id="vis_save" style="margin-top:14px">සුරකින්න</button>`);
+  host.appendChild(p);
+  $("#vis_save").onclick = async () => {
+    const data = {};
+    VIS_FIELDS.forEach(([k]) => data[k] = $("#vis_" + k).checked);
+    await saveVisibility(data);
+    toast("සුරැකිණි ✓");
+  };
+}
+function blessings(host) {
+  head(host, "සුබ පැතුම් අනුමැතිය", "පොදු අඩවියේ දිස්වීමට පෙර අනුමත කරන්න");
+  const list = [...S2.blessings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const pend = list.filter((b) => !b.approved), appr = list.filter((b) => b.approved);
+  const render = (arr, title) => card(`<h3>${title} (${arr.length})</h3>${arr.length ? arr.map((b) => `
+    <div class="line">
+      <div><i>"${esc(b.message)}"</i><br><span class="muted">— ${esc(b.guestName)}</span></div>
+      <div class="line-actions">
+        ${b.approved ? `<button class="btn xs ghost un" data-id="${b.id}">සැඟවීම</button>` : `<button class="btn xs ok ap" data-id="${b.id}">අනුමත</button>`}
+        <button class="btn xs danger del" data-id="${b.id}">මකන්න</button>
+      </div></div>`).join("") : `<p class="muted">කිසිවක් නැත.</p>`}`);
+  const pe = render(pend, "අනුමැතිය බලාපොරොත්තුවෙන්");
+  host.appendChild(pe);
+  const ap = render(appr, "අනුමත වූ");
+  host.appendChild(ap);
+  $$(".ap", host).forEach((b) => b.onclick = () => approveBlessing(b.dataset.id, true).then(() => toast("අනුමත කෙරිණි ✓")));
+  $$(".un", host).forEach((b) => b.onclick = () => approveBlessing(b.dataset.id, false).then(() => toast("සඟවන ලදී")));
+  $$(".del", host).forEach((b) => b.onclick = () => {
+    if (confirmAct("මකන්නද?")) deleteBlessing(b.dataset.id).then(() => toast("මකා දැමිණි"));
+  });
+}
+function budget(host) {
+  head(host, "අයවැය ගණනය", "මංගල වියදම් සැලසුම");
+  const items = [...S2.budget].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const total = items.reduce((a, b) => a + (Number(b.amount) || 0), 0);
+  const add = card(`
+    <h3>නව වියදම් අයිතමයක්</h3>
+    <div class="grid2">
+      <div class="field"><label>විස්තරය</label><input class="input" id="bd_label" placeholder="හෝටල් ගාස්තු"></div>
+      <div class="field"><label>මුදල (රු.)</label><input class="input" id="bd_amt" type="number" min="0"></div>
+    </div>
+    <button class="btn primary" id="bd_add">එක් කරන්න</button>`);
+  host.appendChild(add);
+  $("#bd_add").onclick = async () => {
+    const label = $("#bd_label").value.trim();
+    const amount = Number($("#bd_amt").value) || 0;
+    if (!label) {
+      toast("විස්තරය ඇතුළත් කරන්න", "warn");
+      return;
+    }
+    await addBudget({ label, amount });
+    $("#bd_label").value = "";
+    $("#bd_amt").value = "";
+    toast("එක් කෙරිණි ✓");
+  };
+  const list = card(`
+    <div class="panel-head"><h3>වියදම් ලැයිස්තුව</h3><div class="big-total">මුළු: ${money(total)}</div></div>
+    ${items.length ? `<table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල</th><th></th></tr></thead><tbody>
+      ${items.map((b) => `<tr><td>${esc(b.label)}</td><td>${money(b.amount)}</td><td><button class="btn xs danger del" data-id="${b.id}">මකන්න</button></td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">තවම අයිතම නැත.</p>`}`);
+  host.appendChild(list);
+  $$(".del", list).forEach((b) => b.onclick = () => {
+    if (confirmAct("මකන්නද?")) deleteBudget(b.dataset.id).then(() => toast("මකා දැමිණි"));
+  });
+}
+function billing(host) {
+  head(host, "බිල්පත් හා ගෙවීම්", "ගෙවීම් සටහන් කර තබා ගන්න");
+  const items = [...S2.billing].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const total = items.reduce((a, b) => a + (Number(b.amount) || 0), 0);
+  const paid = items.filter((b) => b.paid).reduce((a, b) => a + (Number(b.amount) || 0), 0);
+  const add = card(`
+    <h3>නව ගෙවීමක්</h3>
+    <div class="grid2">
+      <div class="field"><label>විස්තරය</label><input class="input" id="bl_label" placeholder="කේක් ගෙවීම"></div>
+      <div class="field"><label>මුදල (රු.)</label><input class="input" id="bl_amt" type="number" min="0"></div>
+    </div>
+    <label class="switch"><input type="checkbox" id="bl_paid"><span></span>ගෙවා අවසන්</label>
+    <button class="btn primary" id="bl_add" style="margin-top:8px">එක් කරන්න</button>`);
+  host.appendChild(add);
+  $("#bl_add").onclick = async () => {
+    const label = $("#bl_label").value.trim();
+    if (!label) {
+      toast("විස්තරය ඇතුළත් කරන්න", "warn");
+      return;
+    }
+    await addBilling({ label, amount: Number($("#bl_amt").value) || 0, paid: $("#bl_paid").checked });
+    $("#bl_label").value = "";
+    $("#bl_amt").value = "";
+    $("#bl_paid").checked = false;
+    toast("එක් කෙරිණි ✓");
+  };
+  const list = card(`
+    <div class="panel-head"><h3>ගෙවීම්</h3><div class="big-total">ගෙවා ඇත ${money(paid)} / ${money(total)}</div></div>
+    ${items.length ? `<table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල</th><th>තත්ත්වය</th><th></th></tr></thead><tbody>
+      ${items.map((b) => `<tr><td>${esc(b.label)}</td><td>${money(b.amount)}</td>
+        <td><button class="btn xs ${b.paid ? "ok" : "ghost"} pay" data-id="${b.id}" data-p="${b.paid ? 0 : 1}">${b.paid ? "ගෙවා ඇත" : "ගෙවිය යුතු"}</button></td>
+        <td><button class="btn xs danger del" data-id="${b.id}">මකන්න</button></td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">තවම ගෙවීම් නැත.</p>`}`);
+  host.appendChild(list);
+  $$(".pay", list).forEach((b) => b.onclick = () => updateBilling(b.dataset.id, { paid: b.dataset.p === "1" }).then(() => toast("යාවත්කාලීනයි")));
+  $$(".del", list).forEach((b) => b.onclick = () => {
+    if (confirmAct("මකන්නද?")) deleteBilling(b.dataset.id).then(() => toast("මකා දැමිණි"));
+  });
+}
+function qr(host) {
+  head(host, "QR කේතය", "පොදු ආරාධනා පිටුවට QR කේතයක්");
+  const url = "https://helasiritha.vercel.app";
+  const p = card(`
+    <div class="field"><label>QR කේතය යොමුවන සබැඳිය</label><input class="input" id="qr_url" value="${url}"></div>
+    <div class="qr-stage">
+      <img id="qr_img" alt="QR" width="300" height="300" src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(url)}">
+    </div>
+    <div class="row">
+      <button class="btn primary" id="qr_gen">යළි සෑදීම</button>
+      <a class="btn ghost" id="qr_dl" download="helasiritha-qr.png" href="https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(url)}" target="_blank" rel="noopener">බාගත කරන්න</a>
+    </div>
+    <p class="muted">මෙය මුද්‍රණය කර මංගල ආරාධනා පත්‍රවල හෝ වෙබ් අඩවියේ බෙදාගත හැක.</p>`);
+  host.appendChild(p);
+  const gen = () => {
+    const u = $("#qr_url").value.trim() || url;
+    $("#qr_img").src = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(u)}`;
+    $("#qr_dl").href = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(u)}`;
+  };
+  $("#qr_gen").onclick = gen;
+}
+
+// release/helasiritha-admin/assets/js/admin.js
+var $2 = (s, r = document) => r.querySelector(s);
+var $$2 = (s, r = document) => Array.from(r.querySelectorAll(s));
+var ICONS = {
+  grid: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
+  ring: "M12 7a5 5 0 100 10 5 5 0 000-10zM9 3l3 3 3-3",
+  plus: "M12 5v14M5 12h14",
+  man: "M12 8a3 3 0 100-6 3 3 0 000 6zM6 21v-2a6 6 0 0112 0v2",
+  woman: "M12 8a3 3 0 100-6 3 3 0 000 6zM12 11v10M9 18h6",
+  check: "M20 6L9 17l-5-5",
+  clock: "M12 7v5l3 3M12 3a9 9 0 100 18 9 9 0 000-18z",
+  x: "M6 6l12 12M18 6L6 18",
+  swap: "M7 7h11l-3-3M17 17H6l3 3",
+  table: "M3 5h18v14H3zM3 10h18M9 5v14",
+  cup: "M5 4h12v6a6 6 0 01-12 0zM17 6h2a2 2 0 010 4h-2M5 20h12",
+  list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+  image: "M3 5h18v14H3zM8 11l3 3 5-6 4 5",
+  paint: "M12 3a9 9 0 000 18c1 0 1-1 1-2a2 2 0 012-2h2a3 3 0 003-3 7 7 0 00-11-11z",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z",
+  heart: "M12 21s-7-4.5-10-9a4 4 0 017-3 4 4 0 017 3c-3 4.5-10 9-10 9z",
+  calc: "M5 3h14v18H5zM9 7h6M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01",
+  card: "M2 6h20v12H2zM2 10h20",
+  qr: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v3M17 20h4"
+};
+var icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[k] || ICONS.grid}"/></svg>`;
+var active = "dashboard";
+var started = false;
+function showLogin(reason) {
+  $2("#app").hidden = true;
+  $2("#login").hidden = false;
+  if (reason === "forbidden") $2("#loginErr").textContent = authErrorSi("auth/not-admin");
+}
+function wireLogin() {
+  $2("#googleBtn").onclick = async () => {
+    $2("#loginErr").textContent = "";
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      $2("#loginErr").textContent = authErrorSi(e.code);
+    }
+  };
+  $2("#loginForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $2("#loginErr").textContent = "";
+    const btn = $2("#loginSubmit");
+    btn.disabled = true;
+    btn.textContent = "පිවිසෙමින්…";
+    try {
+      await signIn($2("#email").value, $2("#password").value);
+    } catch (e) {
+      $2("#loginErr").textContent = authErrorSi(e.code);
+    }
+    btn.disabled = false;
+    btn.textContent = "පිවිසෙන්න";
+  });
+  $2("#forgotBtn").onclick = async () => {
+    const em = $2("#email").value.trim() || ADMIN_EMAIL;
+    try {
+      await resetPassword(em);
+      toast("මුරපද යළි පිහිටුවීමේ ඊමේල් එවන ලදී.");
+    } catch (e) {
+      $2("#loginErr").textContent = authErrorSi(e.code);
+    }
+  };
+}
+function showApp(user) {
+  $2("#login").hidden = true;
+  $2("#app").hidden = false;
+  $2("#whoami").textContent = user.email;
+  if (!started) {
+    started = true;
+    startAdminRealtime();
+    buildSidebar();
+  }
+  go(active);
+}
+function buildSidebar() {
+  const nav = $2("#nav");
+  const groups = {};
+  MODULES.forEach((m) => {
+    (groups[m.group] = groups[m.group] || []).push(m);
+  });
+  nav.innerHTML = Object.entries(groups).map(([g, mods]) => `
+    <div class="nav-group"><div class="nav-group-label">${g}</div>
+      ${mods.map((m) => `<button class="nav-item" data-key="${m.key}">${icon(m.icon)}<span>${m.label}</span></button>`).join("")}
+    </div>`).join("");
+  $$2(".nav-item", nav).forEach((b) => b.onclick = () => {
+    go(b.dataset.key);
+    closeSidebarMobile();
+  });
+}
+function go(key) {
+  active = key;
+  $$2(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.key === key));
+  const m = MODULES.find((x) => x.key === key);
+  $2("#crumb").textContent = m ? m.label : "";
+  renderModule(key, $2("#main"));
+  $2("#main").scrollTop = 0;
+}
+var liveTimer;
+onChange(() => {
+  if (!started || !LIVE.has(active)) return;
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest("#main") && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "checkbox") return;
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => renderModule(active, $2("#main")), 350);
+});
+$2("#logoutBtn").onclick = async () => {
+  await signOutAdmin();
+  toast("පිටවිය.");
+};
+$2("#menuBtn").onclick = () => $2("#sidebar").classList.toggle("open");
+function closeSidebarMobile() {
+  if (window.matchMedia("(max-width:900px)").matches) $2("#sidebar").classList.remove("open");
+}
+$2("#scrim").onclick = () => $2("#sidebar").classList.remove("open");
+wireLogin();
+watchAuth(showApp, showLogin);
+
+  </script>
 </body>
 </html>
