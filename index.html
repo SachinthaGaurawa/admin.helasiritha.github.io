@@ -77,6 +77,9 @@ code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; 
 
 /* ───────────── APP SHELL ───────────── */
 #app { display:grid; grid-template-columns:264px 1fr; min-height:100svh; }
+/* the [hidden] attribute must win over the #login/#app display rules above,
+   otherwise the signed-out app renders below the login card (ID beats [hidden]). */
+#login[hidden], #app[hidden] { display:none !important; }
 #sidebar { background:var(--sidebar); color:#e9e2d2; display:flex; flex-direction:column; position:sticky; top:0; height:100svh; overflow:auto; }
 .side-brand { padding:20px 18px; font-weight:800; font-size:1.15rem; letter-spacing:.04em; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--sidebar-2); }
 .side-brand .dot { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#E7CE97,#A48354); flex:0 0 auto; }
@@ -171,14 +174,51 @@ code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; 
 }
 @media (max-width:520px) { #main { padding:14px; } .topbar { padding:12px 14px; } .login-card { padding:26px 20px; } }
 
-  </style>
+/* ───────────── login logo (image) + brand mark ───────────── */
+.login-card .logo {
+  width:78px; height:78px; padding:0; overflow:hidden;
+  background:linear-gradient(135deg,#E7CE97,#A48354);
+  box-shadow:0 10px 26px -12px rgba(164,131,84,.8), 0 0 0 4px color-mix(in srgb,var(--gold) 26%, transparent);
+}
+.login-card .logo img { width:100%; height:100%; object-fit:cover; }
+.brand-ic { width:32px; height:32px; border-radius:50%; flex:0 0 auto; object-fit:cover; box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 32%, transparent); }
+
+/* ───────────── confirm / alert modal ───────────── */
+.modal { position:fixed; inset:0; z-index:300; display:none; place-items:center; padding:20px;
+  background:rgba(20,16,8,.55); backdrop-filter:blur(3px); }
+.modal.show { display:grid; animation:mfade .18s ease; }
+@keyframes mfade { from { opacity:0 } to { opacity:1 } }
+.modal-card { width:100%; max-width:380px; background:var(--panel); border-radius:18px; padding:26px 24px; text-align:center;
+  box-shadow:0 30px 80px -28px #000; animation:mpop .2s cubic-bezier(.2,.8,.2,1); }
+@keyframes mpop { from { transform:translateY(10px) scale(.97); opacity:.6 } to { transform:none; opacity:1 } }
+.modal-ic { width:54px; height:54px; margin:0 auto 12px; border-radius:50%; display:grid; place-items:center; font-size:1.5rem; }
+.modal-ic.danger { background:#f7e0dd; color:var(--bad); }
+.modal-ic.ask { background:#f3ecd9; color:var(--gold-d); }
+.modal-title { margin:.2em 0; font-size:1.2rem; }
+.modal-msg { color:var(--muted); margin:0 0 18px; }
+.modal-actions { display:flex; gap:10px; }
+.modal-actions .btn { flex:1; justify-content:center; }
+
+/* ───────────── visual polish (modern, non-traditional) ───────────── */
+.stat { position:relative; overflow:hidden; background:linear-gradient(180deg,#fff,#faf6ee); }
+.stat::before { content:""; position:absolute; left:0; right:0; top:0; height:3px; background:linear-gradient(90deg,#E7CE97,#A48354); opacity:.75; }
+.panel { background:linear-gradient(180deg,#fff,#fffdf8); }
+.panel h3 { position:relative; padding-left:12px; }
+.panel h3::before { content:""; position:absolute; left:0; top:.15em; bottom:.15em; width:3px; border-radius:2px; background:linear-gradient(180deg,#E7CE97,#A48354); }
+.nav-item.active { box-shadow:0 8px 20px -12px rgba(201,165,116,.95); }
+.topbar { box-shadow:0 1px 0 color-mix(in srgb,var(--gold) 28%, transparent); }
+.topbar .crumb { color:#3a3326; }
+.tbl tbody tr:hover { background:#faf7f0; }
+.mini:focus { outline:2px solid color-mix(in srgb,var(--gold) 65%, transparent); border-color:var(--gold); }
+
+</style>
 </head>
 <body>
 
   <!-- ░░ LOGIN ░░ -->
   <section id="login">
     <div class="login-card">
-      <div class="logo">හෙ</div>
+      <div class="logo"><img src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="හෙළ සිරිත" /></div>
       <h1>හෙළ සිරිත · පරිපාලනය</h1>
       <p class="sub">පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.</p>
 
@@ -203,7 +243,7 @@ code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; 
   <!-- ░░ APP ░░ -->
   <div id="app" hidden>
     <aside id="sidebar">
-      <div class="side-brand"><span class="dot"></span> හෙළ සිරිත</div>
+      <div class="side-brand"><img class="brand-ic" src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="" /> හෙළ සිරිත</div>
       <nav id="nav"></nav>
       <div class="side-foot">
         <div class="whoami" id="whoami"></div>
@@ -227,1071 +267,234 @@ code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; 
   <noscript><div style="padding:40px;text-align:center">මෙම පුවරුව භාවිතයට JavaScript අවශ්‍යයි.</div></noscript>
 
   <script type="module">
-/* helasiritha · single-file bundle (esbuild esm) — generated from the modular source.
-   Edit the source modules then re-bundle, OR edit inline strings/CSS directly. */
-// release/helasiritha-admin/assets/js/firebase-config.js
-var FIREBASE_SDK_VERSION = "12.14.0";
-var SDK_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
-var FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCC18zyof_ORDkKwxAMJK4G3Atu2AkWodM",
-  authDomain: "helasiritha-official.firebaseapp.com",
-  projectId: "helasiritha-official",
-  storageBucket: "helasiritha-official.firebasestorage.app",
-  messagingSenderId: "993883662089",
-  appId: "1:993883662089:web:b583123218df07be9155d8",
-  measurementId: "G-PBJWLXWVD9"
-};
-var ADMIN_EMAIL = "gaurawasachintha@gmail.com";
-var CLOUDINARY = {
-  cloudName: "dzrfpc9be",
-  uploadPreset: "helasiritha_unsigned"
-};
-
-// release/helasiritha-admin/assets/js/auth.js
-var { initializeApp } = await import(`${SDK_BASE}/firebase-app.js`);
-var authMod = await import(`${SDK_BASE}/firebase-auth.js`);
-var fs = await import(`${SDK_BASE}/firebase-firestore.js`);
-var app = initializeApp(FIREBASE_CONFIG);
-var auth = authMod.getAuth(app);
-var db = fs.getFirestore(app);
-try {
-  authMod.setPersistence(auth, authMod.browserLocalPersistence);
-} catch (_) {
-}
-function isAdminEmail(email) {
-  return !!email && email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-}
-function watchAuth(onIn, onOut) {
-  authMod.onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      onOut(null);
-      return;
-    }
-    if (!isAdminEmail(user.email)) {
-      await authMod.signOut(auth).catch(() => {
-      });
-      onOut("forbidden");
-      return;
-    }
-    onIn(user);
-  });
-}
-async function signIn(email, password) {
-  if (!isAdminEmail(email)) {
-    const e = new Error("forbidden");
-    e.code = "auth/not-admin";
-    throw e;
-  }
-  return authMod.signInWithEmailAndPassword(auth, email.trim(), password);
-}
-async function signInWithGoogle() {
-  const provider = new authMod.GoogleAuthProvider();
-  provider.setCustomParameters({ login_hint: ADMIN_EMAIL, prompt: "select_account" });
-  const cred = await authMod.signInWithPopup(auth, provider);
-  if (!isAdminEmail(cred.user?.email)) {
-    await authMod.signOut(auth).catch(() => {
-    });
-    const e = new Error("forbidden");
-    e.code = "auth/not-admin";
-    throw e;
-  }
-  return cred;
-}
-async function resetPassword(email) {
-  if (!isAdminEmail(email)) {
-    const e = new Error("forbidden");
-    e.code = "auth/not-admin";
-    throw e;
-  }
-  return authMod.sendPasswordResetEmail(auth, email.trim());
-}
-async function signOutAdmin() {
-  return authMod.signOut(auth);
-}
-function authErrorSi(code) {
-  const m = {
-    "auth/not-admin": "මෙම පද්ධතියට පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.",
-    "auth/invalid-credential": "ඊමේල් හෝ මුරපදය වැරදියි.",
-    "auth/invalid-email": "ඊමේල් ලිපිනය වලංගු නැත.",
-    "auth/user-not-found": "එවැනි ගිණුමක් හමු නොවීය.",
-    "auth/wrong-password": "මුරපදය වැරදියි.",
-    "auth/popup-closed-by-user": "පිවිසුම් කවුළුව වසා දමා ඇත.",
-    "auth/popup-blocked": "පිවිසුම් කවුළුව බ්‍රවුසරය විසින් අවහිර කර ඇත.",
-    "auth/too-many-requests": "උත්සාහයන් වැඩියි. මඳක් පසුව නැවත උත්සාහ කරන්න.",
-    "auth/network-request-failed": "අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.",
-    "auth/unauthorized-domain": "මෙම වසම Firebase Auth හි අවසර ලත් වසම් අතර නැත."
-  };
-  return m[code] || "පිවිසීමේ දෝෂයක්. නැවත උත්සාහ කරන්න.";
-}
-
-// release/helasiritha-admin/assets/js/store.js
-var {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  orderBy,
-  getDocs,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  serverTimestamp
-} = fs;
-var listeners = /* @__PURE__ */ new Set();
-var S = {
-  ready: false,
-  guests: [],
-  rsvps: [],
-  rsvpMap: {},
-  blessings: [],
-  agenda: [],
-  gallery: [],
-  budget: [],
-  billing: [],
-  site: {},
-  theme: {},
-  visibility: {},
-  stats: {}
-};
-function onChange(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-function emit() {
-  listeners.forEach((f) => f(S));
-}
-function mergedGuests() {
-  return S.guests.map((g) => {
-    const r = S.rsvpMap[g.id];
-    return {
-      ...g,
-      status: r?.status || g.status || "pending",
-      takingLiquor: r ? !!r.takingLiquor : !!g.takingLiquor,
-      partySize: r?.partySize || 1,
-      dietary: r?.dietary || g.dietary || "",
-      respondedAt: r?.respondedAt || g.respondedAt || null
-    };
-  });
-}
-function buildSearchTokens(...parts) {
-  const cleaned = parts.join(" ").toLowerCase().normalize("NFC").replace(/[\u200b-\u200d\uFEFF]/g, "").replace(/\s+/g, " ").trim();
-  const whole = cleaned.replace(/\s/g, "");
-  return Array.from(/* @__PURE__ */ new Set([cleaned, whole, ...cleaned.split(" ")])).filter(Boolean);
-}
-function startAdminRealtime() {
-  onSnapshot(doc(db, "config", "site"), (s) => {
-    S.site = s.exists() ? s.data() : {};
-    emit();
-  });
-  onSnapshot(doc(db, "config", "theme"), (s) => {
-    S.theme = s.exists() ? s.data() : {};
-    emit();
-  });
-  onSnapshot(doc(db, "config", "visibility"), (s) => {
-    S.visibility = s.exists() ? s.data() : {};
-    emit();
-  });
-  onSnapshot(doc(db, "config", "stats"), (s) => {
-    S.stats = s.exists() ? s.data() : {};
-    emit();
-  });
-  onSnapshot(collection(db, "guests"), (snap) => {
-    S.guests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    S.ready = true;
-    emit();
-    scheduleStats();
-  });
-  onSnapshot(collection(db, "rsvps"), (snap) => {
-    S.rsvps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    S.rsvpMap = Object.fromEntries(S.rsvps.map((r) => [r.guestId || r.id, r]));
-    emit();
-    scheduleStats();
-  });
-  onSnapshot(query(collection(db, "agenda"), orderBy("order", "asc")), (snap) => {
-    S.agenda = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    emit();
-  });
-  onSnapshot(query(collection(db, "gallery"), orderBy("order", "asc")), (snap) => {
-    S.gallery = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    emit();
-  });
-  onSnapshot(collection(db, "blessings"), (snap) => {
-    S.blessings = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    emit();
-  });
-  onSnapshot(collection(db, "budget"), (snap) => {
-    S.budget = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    emit();
-  });
-  onSnapshot(collection(db, "billing"), (snap) => {
-    S.billing = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    emit();
-  });
-}
-var statsTimer = null;
-function scheduleStats() {
-  clearTimeout(statsTimer);
-  statsTimer = setTimeout(recomputeStats, 1200);
-}
-async function recomputeStats() {
-  const m = mergedGuests();
-  const next = {
-    totalGuests: m.length,
-    confirmed: m.filter((g) => g.status === "confirmed").length,
-    pending: m.filter((g) => g.status === "pending").length,
-    declined: m.filter((g) => g.status === "declined").length,
-    updatedAt: Date.now()
-  };
-  const cur = S.stats || {};
-  if (cur.totalGuests === next.totalGuests && cur.confirmed === next.confirmed && cur.pending === next.pending && cur.declined === next.declined) return;
-  try {
-    await setDoc(doc(db, "config", "stats"), next, { merge: true });
-  } catch (_) {
-  }
-}
-var saveSite = (data) => setDoc(doc(db, "config", "site"), { ...data, updatedAt: Date.now() }, { merge: true });
-var saveTheme = (data) => setDoc(doc(db, "config", "theme"), { ...data, updatedAt: Date.now() }, { merge: true });
-var saveVisibility = (data) => setDoc(doc(db, "config", "visibility"), { ...data, updatedAt: Date.now() }, { merge: true });
-async function addGuest({ name, familyName, side }) {
-  const g = {
-    name: name.trim(),
-    familyName: (familyName || "").trim(),
-    side: side === "bride" ? "bride" : "groom",
-    searchTokens: buildSearchTokens(name, familyName),
-    status: "pending",
-    takingLiquor: false,
-    tableNumber: null,
-    plusOnes: 0,
-    dietary: "",
-    respondedAt: null,
-    createdAt: Date.now()
-  };
-  return addDoc(collection(db, "guests"), g);
-}
-async function addGuestsBulk(rows) {
-  const chunks = [];
-  for (let i = 0; i < rows.length; i += 400) chunks.push(rows.slice(i, i + 400));
-  let n = 0;
-  for (const chunk of chunks) {
-    const batch = writeBatch(db);
-    chunk.forEach((r) => {
-      const ref = doc(collection(db, "guests"));
-      batch.set(ref, {
-        name: r.name.trim(),
-        familyName: (r.familyName || "").trim(),
-        side: r.side === "bride" ? "bride" : "groom",
-        searchTokens: buildSearchTokens(r.name, r.familyName),
-        status: "pending",
-        takingLiquor: false,
-        tableNumber: null,
-        plusOnes: 0,
-        dietary: "",
-        respondedAt: null,
-        createdAt: Date.now()
-      });
-      n++;
-    });
-    await batch.commit();
-  }
-  return n;
-}
-var deleteGuest = (id) => deleteDoc(doc(db, "guests", id));
-var setGuestTable = (id, tableNumber) => updateDoc(doc(db, "guests", id), { tableNumber: tableNumber === "" || tableNumber == null ? null : Number(tableNumber) });
-async function upsertRsvp(guestId, patch) {
-  const g = S.guests.find((x) => x.id === guestId) || {};
-  return setDoc(doc(db, "rsvps", guestId), {
-    guestId,
-    guestName: g.name || "",
-    side: g.side || "groom",
-    ...patch,
-    respondedAt: Date.now()
-  }, { merge: true });
-}
-var setGuestStatus = (id, status) => upsertRsvp(id, { status });
-var setGuestLiquor = (id, takingLiquor) => upsertRsvp(id, { takingLiquor: !!takingLiquor });
-var addAgenda = (e) => addDoc(collection(db, "agenda"), { ...e, createdAt: Date.now() });
-var updateAgenda = (id, patch) => updateDoc(doc(db, "agenda", id), patch);
-var deleteAgenda = (id) => deleteDoc(doc(db, "agenda", id));
-var addGallery = (img) => addDoc(collection(db, "gallery"), { ...img, createdAt: Date.now() });
-var deleteGallery = (id) => deleteDoc(doc(db, "gallery", id));
-var addBudget = (b) => addDoc(collection(db, "budget"), { ...b, createdAt: Date.now() });
-var deleteBudget = (id) => deleteDoc(doc(db, "budget", id));
-var addBilling = (b) => addDoc(collection(db, "billing"), { ...b, createdAt: Date.now() });
-var updateBilling = (id, patch) => updateDoc(doc(db, "billing", id), patch);
-var deleteBilling = (id) => deleteDoc(doc(db, "billing", id));
-var approveBlessing = (id, approved) => updateDoc(doc(db, "blessings", id), { approved: !!approved });
-var deleteBlessing = (id) => deleteDoc(doc(db, "blessings", id));
-async function uploadToCloudinary(file, onProgress) {
-  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`;
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("upload_preset", CLOUDINARY.uploadPreset);
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
-    };
-    xhr.onload = () => {
-      try {
-        const res = JSON.parse(xhr.responseText);
-        if (res.secure_url) resolve(res);
-        else reject(new Error(res.error?.message || "upload failed"));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    xhr.onerror = () => reject(new Error("network error"));
-    xhr.send(fd);
-  });
-}
-
-// release/helasiritha-admin/assets/js/modules.js
-var S2 = S;
-var $ = (s, r = document) => r.querySelector(s);
-var $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
-var money = (n) => "රු. " + (Number(n) || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-var toastTimer;
-function toast(msg, kind = "ok") {
-  let t = $("#toast");
-  if (!t) {
-    t = document.createElement("div");
-    t.id = "toast";
-    document.body.appendChild(t);
-  }
-  t.className = "toast show " + kind;
-  t.textContent = msg;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
-}
-function confirmAct(msg) {
-  return window.confirm(msg);
-}
-var LIVE = /* @__PURE__ */ new Set(["dashboard", "groomGuests", "brideGuests", "confirmed", "pending", "notComing", "changeState", "seating", "liquor", "gallery", "blessings", "budget", "billing"]);
-var MODULES = [
-  { key: "dashboard", label: "දළ විශ්ලේෂණය", icon: "grid", group: "මුල් පිටුව" },
-  { key: "weddingDetails", label: "මංගල තොරතුරු", icon: "ring", group: "මුල් පිටුව" },
-  { key: "addGuests", label: "ආගන්තුකයන් එක් කිරීම", icon: "plus", group: "ආගන්තුකයෝ" },
-  { key: "groomGuests", label: "ගෞරවගේ ආගන්තුකයෝ", icon: "man", group: "ආගන්තුකයෝ" },
-  { key: "brideGuests", label: "කෞශානිගේ ආගන්තුකයෝ", icon: "woman", group: "ආගන්තුකයෝ" },
-  { key: "confirmed", label: "පැමිණීම තහවුරු", icon: "check", group: "පිළිතුරු" },
-  { key: "pending", label: "පිළිතුරු නොලත්", icon: "clock", group: "පිළිතුරු" },
-  { key: "notComing", label: "නොපැමිණෙන", icon: "x", group: "පිළිතුරු" },
-  { key: "changeState", label: "තත්ත්වය වෙනස් කිරීම", icon: "swap", group: "පිළිතුරු" },
-  { key: "seating", label: "මේස වෙන් කිරීම", icon: "table", group: "සැලසුම්" },
-  { key: "liquor", label: "මත්පැන් ගණන", icon: "cup", group: "සැලසුම්" },
-  { key: "agenda", label: "වැඩසටහන සැකසීම", icon: "list", group: "සැලසුම්" },
-  { key: "gallery", label: "ඡායාරූප එකතුව", icon: "image", group: "පෙනුම" },
-  { key: "theme", label: "වර්ණ සැකසුම්", icon: "paint", group: "පෙනුම" },
-  { key: "visibility", label: "කොටස් පෙන්වීම/සැඟවීම", icon: "eye", group: "පෙනුම" },
-  { key: "blessings", label: "සුබ පැතුම් අනුමැතිය", icon: "heart", group: "පෙනුම" },
-  { key: "budget", label: "අයවැය ගණනය", icon: "calc", group: "මූල්‍ය" },
-  { key: "billing", label: "බිල්පත් හා ගෙවීම්", icon: "card", group: "මූල්‍ය" },
-  { key: "qr", label: "QR කේතය", icon: "qr", group: "මූල්‍ය" }
-];
-function renderModule(key, host) {
-  const fn = {
-    dashboard,
-    weddingDetails,
-    addGuests,
-    groomGuests,
-    brideGuests,
-    confirmed,
-    pending,
-    notComing,
-    changeState,
-    seating,
-    liquor,
-    agenda,
-    gallery,
-    theme,
-    visibility,
-    blessings,
-    budget,
-    billing,
-    qr
-  }[key] || dashboard;
-  host.innerHTML = "";
-  fn(host);
-}
-function head(host, title, sub) {
-  const h = document.createElement("div");
-  h.className = "mod-head";
-  h.innerHTML = `<h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ""}`;
-  host.appendChild(h);
-  return host;
-}
-function card(html, cls = "") {
-  const d = document.createElement("div");
-  d.className = "panel " + cls;
-  d.innerHTML = html;
-  return d;
-}
-function dashboard(host) {
-  head(host, "දළ විශ්ලේෂණය", "පද්ධතියේ සජීවී තත්ත්වය");
-  const m = mergedGuests();
-  const groom = m.filter((g) => g.side === "groom"), bride = m.filter((g) => g.side === "bride");
-  const by = (arr, s) => arr.filter((g) => g.status === s).length;
-  const liquorYes = m.filter((g) => g.status === "confirmed" && g.takingLiquor).length;
-  const heads = m.filter((g) => g.status === "confirmed").reduce((a, g) => a + (g.partySize || 1), 0);
-  const stat = (n, l, cls = "") => `<div class="stat ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
-  const grid = card(`
+var at="12.14.0",j=`https://www.gstatic.com/firebasejs/${at}`,re={apiKey:"AIzaSyD2HEO-yoV6RLsD1iYgj_EocItqotAh3Qk",authDomain:"helasiritha-official.firebaseapp.com",projectId:"helasiritha-official",storageBucket:"helasiritha-official.firebasestorage.app",messagingSenderId:"993883662089",appId:"1:993883662089:web:b583123218df07be9155d8",measurementId:"G-PBJWLXWVD9"},R="gaurawasachintha@gmail.com";var{initializeApp:it}=await import(`${j}/firebase-app.js`),M=await import(`${j}/firebase-auth.js`),K=await import(`${j}/firebase-firestore.js`),ce=it(re),A=M.getAuth(ce),m=K.getFirestore(ce);try{M.setPersistence(A,M.browserLocalPersistence)}catch{}function H(e){return!!e&&e.trim().toLowerCase()===R.toLowerCase()}function ue(e,t){M.onAuthStateChanged(A,async a=>{if(!a){t(null);return}if(!H(a.email)){await M.signOut(A).catch(()=>{}),t("forbidden");return}e(a)})}async function pe(e,t){if(!H(e)){let a=new Error("forbidden");throw a.code="auth/not-admin",a}return M.signInWithEmailAndPassword(A,e.trim(),t)}async function me(){let e=new M.GoogleAuthProvider;e.setCustomParameters({login_hint:R,prompt:"select_account"});let t=await M.signInWithPopup(A,e);if(!H(t.user?.email)){await M.signOut(A).catch(()=>{});let a=new Error("forbidden");throw a.code="auth/not-admin",a}return t}async function he(e){if(!H(e)){let t=new Error("forbidden");throw t.code="auth/not-admin",t}return M.sendPasswordResetEmail(A,e.trim())}async function ve(){return M.signOut(A)}function F(e){return{"auth/not-admin":"මෙම පද්ධතියට පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.","auth/invalid-credential":"ඊමේල් හෝ මුරපදය වැරදියි.","auth/invalid-email":"ඊමේල් ලිපිනය වලංගු නැත.","auth/user-not-found":"එවැනි ගිණුමක් හමු නොවීය.","auth/wrong-password":"මුරපදය වැරදියි.","auth/popup-closed-by-user":"පිවිසුම් කවුළුව වසා දමා ඇත.","auth/popup-blocked":"පිවිසුම් කවුළුව බ්‍රවුසරය විසින් අවහිර කර ඇත.","auth/too-many-requests":"උත්සාහයන් වැඩියි. මඳක් පසුව නැවත උත්සාහ කරන්න.","auth/network-request-failed":"අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.","auth/unauthorized-domain":"මෙම වසම Firebase Auth හි අවසර ලත් වසම් අතර නැත."}[e]||"පිවිසීමේ දෝෂයක්. නැවත උත්සාහ කරන්න."}var{collection:E,doc:f,onSnapshot:T,query:ge,orderBy:be,getDocs:zt,setDoc:O,addDoc:P,updateDoc:N,deleteDoc:q,writeBatch:nt,serverTimestamp:jt}=K,W=new Set,b={ready:!1,guests:[],rsvps:[],rsvpMap:{},blessings:[],agenda:[],gallery:[],budget:[],billing:[],site:{},theme:{},visibility:{},stats:{}};function we(e){return W.add(e),()=>W.delete(e)}function L(){W.forEach(e=>e(b))}function z(){return b.guests.map(e=>{let t=b.rsvpMap[e.id];return{...e,status:t?.status||e.status||"pending",takingLiquor:t?!!t.takingLiquor:!!e.takingLiquor,partySize:t?.partySize||1,count:Math.max(1,Number(e.count)||1),dietary:t?.dietary||e.dietary||"",respondedAt:t?.respondedAt||e.respondedAt||null}})}function Y(...e){let t=e.join(" ").toLowerCase().normalize("NFC").replace(/[\u200b-\u200d\uFEFF]/g,"").replace(/\s+/g," ").trim(),a=t.replace(/\s/g,"");return Array.from(new Set([t,a,...t.split(" ")])).filter(Boolean)}function _e(){T(f(m,"config","site"),e=>{b.site=e.exists()?e.data():{},L()}),T(f(m,"config","theme"),e=>{b.theme=e.exists()?e.data():{},L()}),T(f(m,"config","visibility"),e=>{b.visibility=e.exists()?e.data():{},L()}),T(f(m,"config","stats"),e=>{b.stats=e.exists()?e.data():{},L()}),T(E(m,"guests"),e=>{b.guests=e.docs.map(t=>({id:t.id,...t.data()})),b.ready=!0,L(),ye()}),T(E(m,"rsvps"),e=>{b.rsvps=e.docs.map(t=>({id:t.id,...t.data()})),b.rsvpMap=Object.fromEntries(b.rsvps.map(t=>[t.guestId||t.id,t])),L(),ye()}),T(ge(E(m,"agenda"),be("order","asc")),e=>{b.agenda=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(ge(E(m,"gallery"),be("order","asc")),e=>{b.gallery=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(E(m,"blessings"),e=>{b.blessings=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(E(m,"budget"),e=>{b.budget=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(E(m,"billing"),e=>{b.billing=e.docs.map(t=>({id:t.id,...t.data()})),L()})}var fe=null;function ye(){clearTimeout(fe),fe=setTimeout(Q,1200)}async function Q(){let e=z(),t=d=>d.reduce((n,s)=>n+Math.max(1,Number(s.count)||1),0),a=e.filter(d=>d.status==="confirmed"),o={totalGuests:e.length,confirmed:a.length,pending:e.filter(d=>d.status==="pending").length,declined:e.filter(d=>d.status==="declined").length,totalPeople:t(e),confirmedPeople:t(a),updatedAt:Date.now()},l=b.stats||{};if(!(l.totalGuests===o.totalGuests&&l.confirmed===o.confirmed&&l.pending===o.pending&&l.declined===o.declined&&l.totalPeople===o.totalPeople&&l.confirmedPeople===o.confirmedPeople))try{await O(f(m,"config","stats"),o,{merge:!0})}catch{}}var $e=e=>O(f(m,"config","site"),{...e,updatedAt:Date.now()},{merge:!0}),xe=e=>O(f(m,"config","theme"),{...e,updatedAt:Date.now()},{merge:!0}),Se=e=>O(f(m,"config","visibility"),{...e,updatedAt:Date.now()},{merge:!0});async function ke({name:e,familyName:t,side:a,count:o}){let l={name:e.trim(),familyName:(t||"").trim(),side:a==="bride"?"bride":"groom",count:Math.max(1,Number(o)||1),searchTokens:Y(e,t),status:"pending",takingLiquor:!1,tableNumber:null,plusOnes:0,dietary:"",respondedAt:null,createdAt:Date.now()};return P(E(m,"guests"),l)}async function Ee(e){let t=[];for(let o=0;o<e.length;o+=400)t.push(e.slice(o,o+400));let a=0;for(let o of t){let l=nt(m);o.forEach(d=>{let n=f(E(m,"guests"));l.set(n,{name:d.name.trim(),familyName:(d.familyName||"").trim(),side:d.side==="bride"?"bride":"groom",count:Math.max(1,Number(d.count)||1),searchTokens:Y(d.name,d.familyName),status:"pending",takingLiquor:!1,tableNumber:null,plusOnes:0,dietary:"",respondedAt:null,createdAt:Date.now()}),a++}),await l.commit()}return a}async function J(e,t){if(t.name||t.familyName){let a=b.guests.find(o=>o.id===e)||{};t.searchTokens=Y(t.name??a.name,t.familyName??a.familyName)}return N(f(m,"guests",e),t)}var Ce=e=>q(f(m,"guests",e));var Me=(e,t)=>N(f(m,"guests",e),{count:Math.max(1,Number(t)||1)});async function Ae(e,t){let a=b.guests.find(o=>o.id===e)||{};return O(f(m,"rsvps",e),{guestId:e,guestName:a.name||"",side:a.side||"groom",...t,respondedAt:Date.now()},{merge:!0})}var Te=(e,t)=>Ae(e,{status:t}),Le=(e,t)=>Ae(e,{takingLiquor:!!t}),Ie=e=>P(E(m,"agenda"),{...e,createdAt:Date.now()}),Z=(e,t)=>N(f(m,"agenda",e),t),De=e=>q(f(m,"agenda",e)),Ne=e=>P(E(m,"gallery"),{...e,createdAt:Date.now()}),qe=e=>q(f(m,"gallery",e)),Ge=e=>P(E(m,"budget"),{...e,createdAt:Date.now()}),ee=(e,t)=>N(f(m,"budget",e),t),Be=e=>q(f(m,"budget",e)),Re=e=>P(E(m,"billing"),{...e,createdAt:Date.now()}),U=(e,t)=>N(f(m,"billing",e),t),Fe=e=>q(f(m,"billing",e)),te=(e,t)=>N(f(m,"blessings",e),{approved:!!t}),Oe=e=>q(f(m,"blessings",e));var je="/api/drive";function st(e,t=1600){return`https://drive.google.com/thumbnail?id=${e}&sz=w${t}`}async function He(){let e=A&&A.currentUser;if(!e)throw new Error("not-signed-in");return e.getIdToken()}function ze(e){return new Promise((t,a)=>{let o=new FileReader;o.onload=()=>t(o.result),o.onerror=()=>a(new Error("read-failed")),o.readAsDataURL(e)})}function dt(e){return new Promise((t,a)=>{let o=new Image;o.onload=()=>t(o),o.onerror=()=>a(new Error("img-failed")),o.src=e})}async function ot(e,t=1600,a=.82){if(!/^image\//.test(e.type||""))return{dataUrl:await ze(e),mime:e.type||"application/octet-stream",name:e.name||"file"};let o=await dt(await ze(e)),l=o.naturalWidth||o.width,d=o.naturalHeight||o.height;if(Math.max(l,d)>t){let p=t/Math.max(l,d);l=Math.round(l*p),d=Math.round(d*p)}let n=document.createElement("canvas");n.width=l,n.height=d,n.getContext("2d").drawImage(o,0,0,l,d);let s=n.toDataURL("image/jpeg",a),r=(e.name||"photo").replace(/\.[^.]+$/,"");return{dataUrl:s,mime:"image/jpeg",name:r+".jpg"}}async function Ue(e,t){t&&t(10);let{dataUrl:a,mime:o,name:l}=await ot(e);t&&t(35);let d=String(a).split(",")[1]||"",n=await He();t&&t(50);let s;try{s=await fetch(`${je}/upload`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+n},body:JSON.stringify({name:l,mimeType:o,dataBase64:d})})}catch{throw new Error("drive-no-server")}if(t&&t(90),s.status===404)throw new Error("drive-no-server");let r=await s.json().catch(()=>({}));if(!s.ok||!r.fileId)throw new Error(r.error||"drive-upload-"+s.status);return t&&t(100),{fileId:r.fileId,url:r.url||st(r.fileId)}}async function ae(e){if(!e)return!1;let t=await He(),a;try{a=await fetch(`${je}/delete`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify({fileId:e})})}catch{throw new Error("drive-no-server")}if(a.ok||a.status===404)return!0;let o=await a.json().catch(()=>({}));throw new Error(o.error||"drive-delete-"+a.status)}var k=b,i=(e,t=document)=>t.querySelector(e),y=(e,t=document)=>Array.from(t.querySelectorAll(e)),g=e=>String(e??"").replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[t]),se=e=>"රු. "+(Number(e)||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2}),rt="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",V=null;function ct(){return window.XLSX?Promise.resolve(window.XLSX):V||(V=new Promise((e,t)=>{let a=document.createElement("script");a.src=rt,a.async=!0,a.onload=()=>window.XLSX?e(window.XLSX):t(new Error("xlsx-load")),a.onerror=()=>t(new Error("xlsx-load")),document.head.appendChild(a)}),V)}function ie(e){if(!e||!e.length)return[];let t=0;e[0].map(d=>String(d??"").trim().toLowerCase()).some(d=>/නම|name|පවුල|family|ගණන|count|පාර්ශ|side/.test(d))&&(t=1);let l=[];for(let d=t;d<e.length;d++){let n=e[d]||[],s=String(n[0]??"").trim();s&&l.push({name:s,familyName:String(n[1]??"").trim(),count:Math.max(1,parseInt(n[2],10)||1)})}return l}function ut(e){return e.split(/\r?\n/).map(t=>t.trim()).filter(Boolean).map(t=>t.split(/[,\t]/).map(a=>a.trim()))}var Ve;function u(e,t="ok"){let a=i("#toast");a||(a=document.createElement("div"),a.id="toast",document.body.appendChild(a)),a.className="toast show "+t,a.textContent=e,clearTimeout(Ve),Ve=setTimeout(()=>a.classList.remove("show"),2600)}function G(e,t={}){return new Promise(a=>{let o=i("#confirmModal");o||(o=document.createElement("div"),o.id="confirmModal",o.className="modal",document.body.appendChild(o));let l=t.danger!==!1;o.innerHTML=`
+      <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="mTitle">
+        <div class="modal-ic ${l?"danger":"ask"}">${l?"🗑":"?"}</div>
+        <h3 class="modal-title" id="mTitle">${g(t.title||"තහවුරු කරන්න")}</h3>
+        <p class="modal-msg">${g(e)}</p>
+        <div class="modal-actions">
+          <button class="btn ghost" id="mCancel">${g(t.cancel||"අවලංගු කරන්න")}</button>
+          <button class="btn ${l?"danger":"primary"}" id="mOk">${g(t.ok||(l?"ඔව්, මකන්න":"තහවුරුයි"))}</button>
+        </div>
+      </div>`,o.classList.add("show");let d=s=>{s.key==="Escape"&&n(!1)},n=s=>{o.classList.remove("show"),document.removeEventListener("keydown",d),a(s)};i("#mOk",o).onclick=()=>n(!0),i("#mCancel",o).onclick=()=>n(!1),o.onclick=s=>{s.target===o&&n(!1)},document.addEventListener("keydown",d),setTimeout(()=>{let s=i("#mOk",o);s&&s.focus()},30)})}var Ye=new Set(["dashboard","groomGuests","brideGuests","confirmed","pending","notComing","changeState","liquor","agenda","gallery","blessings","budget","billing"]),de=[{key:"dashboard",label:"දළ විශ්ලේෂණය",icon:"grid",group:"මුල් පිටුව"},{key:"weddingDetails",label:"මංගල තොරතුරු",icon:"ring",group:"මුල් පිටුව"},{key:"addGuests",label:"ආගන්තුකයන් එක් කිරීම",icon:"plus",group:"ආගන්තුකයෝ"},{key:"brideGuests",label:"කෞශානිගේ ආගන්තුකයෝ",icon:"woman",group:"ආගන්තුකයෝ"},{key:"groomGuests",label:"ගෞරවගේ ආගන්තුකයෝ",icon:"man",group:"ආගන්තුකයෝ"},{key:"confirmed",label:"පැමිණීම තහවුරු",icon:"check",group:"පිළිතුරු"},{key:"pending",label:"පිළිතුරු නොලත්",icon:"clock",group:"පිළිතුරු"},{key:"notComing",label:"නොපැමිණෙන",icon:"x",group:"පිළිතුරු"},{key:"changeState",label:"තත්ත්වය වෙනස් කිරීම",icon:"swap",group:"පිළිතුරු"},{key:"liquor",label:"මත්පැන් ගණන",icon:"cup",group:"සැලසුම්"},{key:"agenda",label:"වැඩසටහන සැකසීම",icon:"list",group:"සැලසුම්"},{key:"gallery",label:"ඡායාරූප එකතුව",icon:"image",group:"පෙනුම"},{key:"theme",label:"වර්ණ සැකසුම්",icon:"paint",group:"පෙනුම"},{key:"visibility",label:"කොටස් පෙන්වීම/සැඟවීම",icon:"eye",group:"පෙනුම"},{key:"blessings",label:"සුබ පැතුම් අනුමැතිය",icon:"heart",group:"පෙනුම"},{key:"budget",label:"අයවැය ගණනය",icon:"calc",group:"මූල්‍ය"},{key:"billing",label:"බිල්පත් හා ගෙවීම්",icon:"card",group:"මූල්‍ය"},{key:"qr",label:"QR කේතය",icon:"qr",group:"මූල්‍ය"}];function oe(e,t){let a={dashboard:Xe,weddingDetails:mt,addGuests:ht,groomGuests:vt,brideGuests:gt,confirmed:bt,pending:ft,notComing:yt,changeState:wt,liquor:_t,agenda:$t,gallery:St,theme:kt,visibility:Et,blessings:Ct,budget:Mt,billing:At,qr:Tt}[e]||Xe;t.innerHTML="",a(t)}function _(e,t,a){let o=document.createElement("div");return o.className="mod-head",o.innerHTML=`<h1>${g(t)}</h1>${a?`<p>${g(a)}</p>`:""}`,e.appendChild(o),e}function w(e,t=""){let a=document.createElement("div");return a.className="panel "+t,a.innerHTML=e,a}function Xe(e){_(e,"දළ විශ්ලේෂණය","පද්ධතියේ සජීවී තත්ත්වය");let t=z(),a=t.filter(h=>h.side==="groom"),o=t.filter(h=>h.side==="bride"),l=(h,$)=>h.filter(x=>x.status===$).length,d=t.filter(h=>h.status==="confirmed"&&h.takingLiquor).length,n=h=>h.reduce(($,x)=>$+Math.max(1,Number(x.count)||1),0),s=n(t),r=n(t.filter(h=>h.status==="confirmed")),p=(h,$,x="")=>`<div class="stat ${x}"><div class="n">${h}</div><div class="l">${$}</div></div>`,S=w(`
     <div class="stat-grid">
-      ${stat(m.length, "මුළු ආගන්තුකයෝ")}
-      ${stat(by(m, "confirmed"), "තහවුරු", "ok")}
-      ${stat(by(m, "pending"), "පොරොත්තුවෙන්", "warn")}
-      ${stat(by(m, "declined"), "නොපැමිණෙන", "bad")}
-      ${stat(heads, "පැමිණෙන මුළු හිස් ගණන")}
-      ${stat(liquorYes, "මත්පැන් අවශ්‍ය")}
-    </div>`);
-  host.appendChild(grid);
-  const split = card(`
+      ${p(t.length,"මුළු ආරාධිත (පවුල්)")}
+      ${p(s,"මුළු පුද්ගලයන්")}
+      ${p(l(t,"confirmed"),"තහවුරු","ok")}
+      ${p(r,"තහවුරු පුද්ගලයන්","ok")}
+      ${p(l(t,"pending"),"පොරොත්තුවෙන්","warn")}
+      ${p(l(t,"declined"),"නොපැමිණෙන","bad")}
+      ${p(d,"මත්පැන් අවශ්‍ය")}
+    </div>`);e.appendChild(S);let C=w(`
     <h3>පාර්ශව අනුව</h3>
     <div class="split">
       <div class="split-col">
-        <div class="split-name">ගෞරව (මනාලයා)</div>
-        <div class="split-row"><span>මුළු</span><b>${groom.length}</b></div>
-        <div class="split-row"><span>තහවුරු</span><b>${by(groom, "confirmed")}</b></div>
-        <div class="split-row"><span>පොරොත්තු</span><b>${by(groom, "pending")}</b></div>
-        <div class="split-row"><span>නොපැමිණෙන</span><b>${by(groom, "declined")}</b></div>
+        <div class="split-name">කෞශානි (මනාලිය)</div>
+        <div class="split-row"><span>මුළු</span><b>${o.length}</b></div>
+        <div class="split-row"><span>තහවුරු</span><b>${l(o,"confirmed")}</b></div>
+        <div class="split-row"><span>පොරොත්තු</span><b>${l(o,"pending")}</b></div>
+        <div class="split-row"><span>නොපැමිණෙන</span><b>${l(o,"declined")}</b></div>
       </div>
       <div class="split-col">
-        <div class="split-name">කෞශානි (මනාලිය)</div>
-        <div class="split-row"><span>මුළු</span><b>${bride.length}</b></div>
-        <div class="split-row"><span>තහවුරු</span><b>${by(bride, "confirmed")}</b></div>
-        <div class="split-row"><span>පොරොත්තු</span><b>${by(bride, "pending")}</b></div>
-        <div class="split-row"><span>නොපැමිණෙන</span><b>${by(bride, "declined")}</b></div>
+        <div class="split-name">ගෞරව (මනාලයා)</div>
+        <div class="split-row"><span>මුළු</span><b>${a.length}</b></div>
+        <div class="split-row"><span>තහවුරු</span><b>${l(a,"confirmed")}</b></div>
+        <div class="split-row"><span>පොරොත්තු</span><b>${l(a,"pending")}</b></div>
+        <div class="split-row"><span>නොපැමිණෙන</span><b>${l(a,"declined")}</b></div>
       </div>
-    </div>`);
-  host.appendChild(split);
-  const recent = [...m].filter((g) => g.respondedAt).sort((a, b) => (b.respondedAt || 0) - (a.respondedAt || 0)).slice(0, 8);
-  const rec = card(`
+    </div>`);e.appendChild(C);let c=[...t].filter(h=>h.respondedAt).sort((h,$)=>($.respondedAt||0)-(h.respondedAt||0)).slice(0,8),I=w(`
     <div class="panel-head"><h3>නවතම පිළිතුරු</h3>
       <button class="btn sm" id="syncBtn">මංගල පහනේ ගණන යළි ගණනය</button></div>
-    ${recent.length ? `<table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>මත්පැන්</th></tr></thead><tbody>
-      ${recent.map((g) => `<tr><td>${esc(g.name)}</td><td>${g.side === "bride" ? "කෞශානි" : "ගෞරව"}</td>
-        <td>${statusChip(g.status)}</td><td>${g.takingLiquor ? "ඔව්" : "නැහැ"}</td></tr>`).join("")}
-    </tbody></table>` : `<p class="muted">තවම පිළිතුරු නැත.</p>`}`);
-  host.appendChild(rec);
-  $("#syncBtn").onclick = async () => {
-    await recomputeStats();
-    toast("මංගල පහනේ ගණන යාවත්කාලීන විය ✓");
-  };
-}
-function statusChip(s) {
-  const map = { confirmed: ["තහවුරු", "ok"], pending: ["පොරොත්තු", "warn"], declined: ["නොපැමිණේ", "bad"] };
-  const [t, c] = map[s] || map.pending;
-  return `<span class="chip ${c}">${t}</span>`;
-}
-function weddingDetails(host) {
-  head(host, "මංගල තොරතුරු", "පොදු වෙබ් අඩවියේ දිස්වන මූලික තොරතුරු");
-  const s = S2.site || {};
-  const f = (id, label, val = "", type = "text") => `
-    <div class="field"><label>${label}</label><input class="input" id="${id}" type="${type}" value="${esc(val)}"></div>`;
-  const ta = (id, label, val = "") => `<div class="field"><label>${label}</label><textarea class="input" id="${id}" rows="3">${esc(val)}</textarea></div>`;
-  const chk = (id, label, val) => `<label class="switch"><input type="checkbox" id="${id}" ${val ? "checked" : ""}><span></span>${label}</label>`;
-  const p = card(`
+    ${c.length?`<table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>මත්පැන්</th></tr></thead><tbody>
+      ${c.map(h=>`<tr><td>${g(h.name)}</td><td>${h.side==="bride"?"කෞශානි":"ගෞරව"}</td>
+        <td>${pt(h.status)}</td><td>${h.takingLiquor?"ඔව්":"නැහැ"}</td></tr>`).join("")}
+    </tbody></table>`:'<p class="muted">තවම පිළිතුරු නැත.</p>'}`);e.appendChild(I),i("#syncBtn").onclick=async()=>{await Q(),u("මංගල පහනේ ගණන යාවත්කාලීන විය ✓")}}function pt(e){let t={confirmed:["තහවුරු","ok"],pending:["පොරොත්තු","warn"],declined:["නොපැමිණේ","bad"]},[a,o]=t[e]||t.pending;return`<span class="chip ${o}">${a}</span>`}function mt(e){_(e,"මංගල තොරතුරු","පොදු වෙබ් අඩවියේ දිස්වන මූලික තොරතුරු");let t=k.site||{},a=(h,$,x="",B="text")=>`
+    <div class="field"><label>${$}</label><input class="input" id="${h}" type="${B}" value="${g(x)}"></div>`,o=(h,$,x="")=>`<div class="field"><label>${$}</label><textarea class="input" id="${h}" rows="3">${g(x)}</textarea></div>`,l=(h,$,x)=>`<label class="switch"><input type="checkbox" id="${h}" ${x?"checked":""}><span></span>${$}</label>`,n=(t.weddingDateISO||"2028-01-12T09:15:00+05:30").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/),s=n?n[1]:"2028-01-12",r=n?n[2]:"09:15",p=parseInt(r.split(":")[0],10)<12?"පෙ.ව.":"ප.ව.",S=w(`
+    <h3>මනාල යුවළ</h3>
     <div class="grid2">
-      ${f("wd_groomSi", "මනාලයාගේ නම (සිංහල)", s.groomNameSi || "ගෞරව")}
-      ${f("wd_brideSi", "මනාලියගේ නම (සිංහල)", s.brideNameSi || "කෞශානි")}
-      ${f("wd_groomEn", "මනාලයාගේ නම (English)", s.groomNameEn || "Gaurawa")}
-      ${f("wd_brideEn", "මනාලියගේ නම (English)", s.brideNameEn || "Kaushani")}
-      ${f("wd_groomParents", "මනාලයාගේ දෙමාපියන් / පෙළපත", s.groomParentsSi || "")}
-      ${f("wd_brideParents", "මනාලියගේ දෙමාපියන් / පෙළපත", s.brideParentsSi || "")}
-      ${f("wd_date", "මංගල දිනය හා වේලාව (ISO)", s.weddingDateISO || "2028-01-12T09:15:00+05:30")}
-      ${f("wd_time", "උත්සව වේලා සටහන", s.ceremonyTimeLabel || "පෙ.ව. 9.15 සිට")}
-      ${f("wd_venue", "ස්ථානයේ නම", s.venueName || "")}
-      ${f("wd_addr", "ලිපිනය", s.venueAddress || "")}
-      ${f("wd_map", "Google Maps සබැඳිය", s.mapUrl || "")}
-      ${f("wd_wa", "WhatsApp/දුරකථන (94…)", s.whatsappNumber || "94705367980")}
-      ${f("wd_deadline", "පිළිතුරු දිය යුතු අවසන් දිනය (ISO)", s.rsvpDeadlineISO || "")}
-      ${f("wd_audio", "පසුබිම් සංගීත URL (Cloudinary, විකල්ප)", s.ambientAudioUrl || "")}
+      ${a("wd_brideSi","මනාලියගේ නම (සිංහල)",t.brideNameSi||"කෞශානි")}
+      ${a("wd_groomSi","මනාලයාගේ නම (සිංහල)",t.groomNameSi||"ගෞරව")}
+      ${a("wd_brideEn","මනාලියගේ නම (English)",t.brideNameEn||"Kaushani")}
+      ${a("wd_groomEn","මනාලයාගේ නම (English)",t.groomNameEn||"Gaurawa")}
+      ${a("wd_brideParents","මනාලියගේ දෙමාපියන් / පෙළපත",t.brideParentsSi||"")}
+      ${a("wd_groomParents","මනාලයාගේ දෙමාපියන් / පෙළපත",t.groomParentsSi||"")}
+      ${a("wd_brideRel","මනාලිය හඳුන්වන වදන",t.brideRelationSi||"ආදරණීය දියණිය")}
+      ${a("wd_groomRel","මනාලයා හඳුන්වන වදන",t.groomRelationSi||"ආදරණීය පුත්")}
     </div>
-    ${ta("wd_invite", "ආරාධනා වදන් (සිංහල)", s.inviteWordingSi || "")}
-    ${ta("wd_love", "විශේෂ සටහන (සිංහල)", s.loveNoteSi || "")}
+    ${a("wd_head","ආරාධනා ශීර්ෂ පාඨය",t.invitationHeadingSi||"ශ්‍රී සුබ මංගලම්")}
+
+    <h3 style="margin-top:18px">මංගල දිනය හා වේලාව</h3>
+    <div class="grid2">
+      <div class="field"><label>මංගල දිනය (දින දර්ශනයෙන් තෝරන්න)</label><input class="input" id="wd_date" type="date" value="${s}"></div>
+      <div class="field"><label>උත්සව ආරම්භක වේලාව</label><input class="input" id="wd_clock" type="time" value="${r}"></div>
+      <div class="field"><label>පෙ.ව / ප.ව (තෝරන්න — ටයිප් කිරීම අවශ්‍ය නැත)</label>
+        <select class="input" id="wd_ampm">
+          <option value="පෙ.ව." ${p==="පෙ.ව."?"selected":""}>පෙ.ව. (පෙරවරු)</option>
+          <option value="ප.ව." ${p==="ප.ව."?"selected":""}>ප.ව. (පස්වරු)</option>
+        </select></div>
+      <div class="field"><label>උත්සව වේලා සටහන (ස්වයංක්‍රීයව සැකසේ)</label><input class="input" id="wd_timeprev" readonly></div>
+    </div>
+
+    <h3 style="margin-top:18px">ස්ථානය හා වෙනත්</h3>
+    <div class="grid2">
+      ${a("wd_venue","ස්ථානයේ නම",t.venueName||"")}
+      ${a("wd_addr","ලිපිනය",t.venueAddress||"")}
+      ${a("wd_map","Google Maps සබැඳිය",t.mapUrl||"")}
+      ${a("wd_deadline","පිළිතුරු දිය යුතු අවසන් දිනය",t.rsvpDeadlineISO?t.rsvpDeadlineISO.slice(0,10):"","date")}
+    </div>
+    ${a("wd_audio","පසුබිම් සංගීත URL (Cloudinary, විකල්ප)",t.ambientAudioUrl||"")}
+    ${o("wd_invite","ආරාධනා වදන් (සිංහල)",t.inviteWordingSi||"")}
+    ${o("wd_love","විශේෂ සටහන (සිංහල) — ඡේද වෙන් කිරීමට හිස් පේළියක් තබන්න",t.loveNoteSi||"")}
     <div class="row">
-      ${chk("wd_liquor", "මත්පැන් කැමැත්ත අසන්න", s.allowLiquorPref !== false)}
-      ${chk("wd_diet", "ආහාර අවශ්‍යතා අසන්න", s.allowDietaryPref !== false)}
+      ${l("wd_liquor","මත්පැන් කැමැත්ත අසන්න",t.allowLiquorPref!==!1)}
+      ${l("wd_diet","ආහාර අවශ්‍යතා අසන්න",t.allowDietaryPref!==!1)}
     </div>
     <button class="btn primary" id="wdSave">තොරතුරු සුරකින්න</button>
-  `);
-  host.appendChild(p);
-  $("#wdSave").onclick = async () => {
-    const data = {
-      groomNameSi: $("#wd_groomSi").value,
-      brideNameSi: $("#wd_brideSi").value,
-      groomNameEn: $("#wd_groomEn").value,
-      brideNameEn: $("#wd_brideEn").value,
-      groomParentsSi: $("#wd_groomParents").value,
-      brideParentsSi: $("#wd_brideParents").value,
-      weddingDateISO: $("#wd_date").value,
-      ceremonyTimeLabel: $("#wd_time").value,
-      venueName: $("#wd_venue").value,
-      venueAddress: $("#wd_addr").value,
-      mapUrl: $("#wd_map").value,
-      whatsappNumber: $("#wd_wa").value,
-      rsvpDeadlineISO: $("#wd_deadline").value,
-      ambientAudioUrl: $("#wd_audio").value,
-      inviteWordingSi: $("#wd_invite").value,
-      loveNoteSi: $("#wd_love").value,
-      allowLiquorPref: $("#wd_liquor").checked,
-      allowDietaryPref: $("#wd_diet").checked
-    };
-    try {
-      await saveSite(data);
-      toast("මංගල තොරතුරු සුරැකිණි ✓");
-    } catch (e) {
-      toast("සුරැකීම අසාර්ථකයි: " + e.message, "bad");
-    }
-  };
-}
-function addGuests(host) {
-  head(host, "ආගන්තුකයන් එක් කිරීම", "තනි තනිව හෝ ලැයිස්තුවක් වශයෙන්");
-  const one = card(`
+  `);e.appendChild(S);let C=()=>{let h=i("#wd_clock").value||"09:15",[$,x]=h.split(":"),B=(parseInt($,10)+11)%12+1;return`${i("#wd_ampm").value} ${B}.${x} සිට`},c=()=>{let h=parseInt((i("#wd_clock").value||"09:00").split(":")[0],10);i("#wd_ampm").value=h<12?"පෙ.ව.":"ප.ව."},I=()=>{i("#wd_timeprev").value=C()};i("#wd_clock").oninput=()=>{c(),I()},i("#wd_ampm").onchange=I,I(),i("#wdSave").onclick=async()=>{let h=i("#wd_date").value||"2028-01-12",$=i("#wd_clock").value||"09:15",x=i("#wd_deadline").value,B={brideNameSi:i("#wd_brideSi").value,groomNameSi:i("#wd_groomSi").value,brideNameEn:i("#wd_brideEn").value,groomNameEn:i("#wd_groomEn").value,brideParentsSi:i("#wd_brideParents").value,groomParentsSi:i("#wd_groomParents").value,brideRelationSi:i("#wd_brideRel").value,groomRelationSi:i("#wd_groomRel").value,invitationHeadingSi:i("#wd_head").value,weddingDateISO:`${h}T${$}:00+05:30`,ceremonyTimeLabel:C(),venueName:i("#wd_venue").value,venueAddress:i("#wd_addr").value,mapUrl:i("#wd_map").value,rsvpDeadlineISO:x?`${x}T23:59:00+05:30`:"",ambientAudioUrl:i("#wd_audio").value,inviteWordingSi:i("#wd_invite").value,loveNoteSi:i("#wd_love").value,allowLiquorPref:i("#wd_liquor").checked,allowDietaryPref:i("#wd_diet").checked};try{await $e(B),u("මංගල තොරතුරු සුරැකිණි ✓")}catch(tt){u("සුරැකීම අසාර්ථකයි: "+tt.message,"bad")}}}function ht(e){_(e,"ආගන්තුකයන් එක් කිරීම","තනි තනිව, ලැයිස්තුවක් ලෙස, හෝ Excel/CSV ගොනුවකින්");let t=w(`
     <h3>තනි ආගන්තුකයෙක්</h3>
     <div class="grid2">
       <div class="field"><label>නම</label><input class="input" id="ag_name"></div>
       <div class="field"><label>පවුලේ නාමය</label><input class="input" id="ag_fam"></div>
     </div>
-    <div class="field"><label>පාර්ශවය</label>
-      <select class="input" id="ag_side"><option value="groom">ගෞරව (මනාලයා)</option><option value="bride">කෞශානි (මනාලිය)</option></select></div>
+    <div class="grid2">
+      <div class="field"><label>පාර්ශවය</label>
+        <select class="input" id="ag_side"><option value="bride">කෞශානි (මනාලිය)</option><option value="groom">ගෞරව (මනාලයා)</option></select></div>
+      <div class="field"><label>පැමිණෙන ගණන (පවුලේ සාමාජික සංඛ්‍යාව)</label><input class="input" id="ag_count" type="number" min="1" value="1"></div>
+    </div>
     <button class="btn primary" id="ag_add">එක් කරන්න</button>
-  `);
-  host.appendChild(one);
-  $("#ag_add").onclick = async () => {
-    const name = $("#ag_name").value.trim();
-    if (!name) {
-      toast("නම ඇතුළත් කරන්න", "warn");
-      return;
-    }
-    await addGuest({ name, familyName: $("#ag_fam").value, side: $("#ag_side").value });
-    $("#ag_name").value = "";
-    $("#ag_fam").value = "";
-    toast("ආගන්තුකයා එක් කෙරිණි ✓");
-  };
-  const bulk = card(`
-    <h3>ලැයිස්තුවක් (එක් පේළියකට එක් අයෙක්)</h3>
-    <p class="muted">ආකෘතිය: <code>නම, පවුලේ නාමය</code> — Excel/Sheets වෙතින් කෙලින්ම අලවන්නත් පුළුවන්.</p>
+  `);e.appendChild(t),i("#ag_add").onclick=async()=>{let l=i("#ag_name").value.trim();if(!l){u("නම ඇතුළත් කරන්න","warn");return}await ke({name:l,familyName:i("#ag_fam").value,side:i("#ag_side").value,count:Math.max(1,parseInt(i("#ag_count").value,10)||1)}),i("#ag_name").value="",i("#ag_fam").value="",i("#ag_count").value="1",u("ආගන්තුකයා එක් කෙරිණි ✓")};let a=w(`
+    <h3>ලැයිස්තුවක් හෝ Excel/CSV ගොනුවක්</h3>
+    <p class="muted">ආකෘතිය: <code>නම, පවුලේ නාමය, ගණන</code> — ගණන වෛකල්පිතයි (පෙරනිමිය 1). Excel/Sheets වෙතින් කෙලින්ම අලවන්න, නැතහොත් <b>.xlsx / .csv</b> ගොනුවක් අමුණන්න.</p>
     <div class="field"><label>පාර්ශවය</label>
-      <select class="input" id="bk_side"><option value="groom">ගෞරව (මනාලයා)</option><option value="bride">කෞශානි (මනාලිය)</option></select></div>
-    <textarea class="input" id="bk_text" rows="8" placeholder="සුනිල් පෙරේරා, පෙරේරා පවුල&#10;නිමල් සිල්වා, සිල්වා පවුල"></textarea>
-    <button class="btn primary" id="bk_add">ලැයිස්තුව එක් කරන්න</button>
-  `);
-  host.appendChild(bulk);
-  $("#bk_add").onclick = async () => {
-    const side = $("#bk_side").value;
-    const rows = $("#bk_text").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
-      const parts = l.split(/[,\t]/).map((x) => x.trim());
-      return { name: parts[0], familyName: parts[1] || "", side };
-    }).filter((r) => r.name);
-    if (!rows.length) {
-      toast("කිසිවක් හමු නොවීය", "warn");
-      return;
-    }
-    const btn = $("#bk_add");
-    btn.disabled = true;
-    btn.textContent = "එක් කරමින්…";
-    try {
-      const n = await addGuestsBulk(rows);
-      $("#bk_text").value = "";
-      toast(`ආගන්තුකයෝ ${n} දෙනෙක් එක් කෙරිණි ✓`);
-    } catch (e) {
-      toast("දෝෂයක්: " + e.message, "bad");
-    }
-    btn.disabled = false;
-    btn.textContent = "ලැයිස්තුව එක් කරන්න";
-  };
-}
-function guestTable(host, filterFn, opts = {}) {
-  const m = mergedGuests().filter(filterFn).sort((a, b) => a.name.localeCompare(b.name, "si"));
-  const wrap = card(`
+      <select class="input" id="bk_side"><option value="bride">කෞශානි (මනාලිය)</option><option value="groom">ගෞරව (මනාලයා)</option></select></div>
+    <div class="field"><label>Excel / CSV ගොනුවක් අමුණන්න</label>
+      <input class="input" id="bk_file" type="file" accept=".xlsx,.xls,.csv"></div>
+    <textarea class="input" id="bk_text" rows="8" placeholder="සුනිල් පෙරේරා, පෙරේරා පවුල, 4&#10;නිමල් සිල්වා, සිල්වා පවුල, 2"></textarea>
+    <button class="btn primary" id="bk_add" style="margin-top:10px">ලැයිස්තුව එක් කරන්න</button>
+  `);e.appendChild(a);let o=async l=>{let d=i("#bk_side").value,n=(l||[]).filter(r=>r&&r.name).map(r=>({...r,side:d}));if(!n.length){u("කිසිවක් හමු නොවීය","warn");return}let s=i("#bk_add");s.disabled=!0,s.textContent="එක් කරමින්…";try{let r=await Ee(n);i("#bk_text").value="",i("#bk_file").value="",u(`ආගන්තුකයෝ ${r} දෙනෙක් එක් කෙරිණි ✓`)}catch(r){u("දෝෂයක්: "+r.message,"bad")}s.disabled=!1,s.textContent="ලැයිස්තුව එක් කරන්න"};i("#bk_add").onclick=()=>o(ie(i("#bk_text").value.split(/\r?\n/).map(l=>l.split(/[,\t]/)))),i("#bk_file").onchange=async()=>{let l=i("#bk_file").files&&i("#bk_file").files[0];if(!l)return;let d=i("#bk_add");d.disabled=!0,d.textContent="කියවමින්…";try{let n;if(/\.csv$/i.test(l.name))n=ie(ut(await l.text()));else{let s=await ct(),r=s.read(await l.arrayBuffer(),{type:"array"});n=ie(s.utils.sheet_to_json(r.Sheets[r.SheetNames[0]],{header:1}))}if(d.disabled=!1,d.textContent="ලැයිස්තුව එක් කරන්න",!n.length){u("ගොනුවේ දත්ත හමු නොවීය","warn");return}await o(n)}catch(n){d.disabled=!1,d.textContent="ලැයිස්තුව එක් කරන්න",u("ගොනුව කියවීම අසාර්ථකයි: "+n.message,"bad")}}}function D(e,t,a={}){let o=z().filter(t).sort((S,C)=>S.name.localeCompare(C.name,"si")),l=w(`
     <div class="panel-head">
-      <h3>${esc(opts.title || "ආගන්තුකයෝ")}</h3>
+      <h3>${g(a.title||"ආගන්තුකයෝ")}</h3>
       <input class="input sm-input" id="gtSearch" placeholder="සොයන්න…">
     </div>
     <div class="tbl-scroll">
     <table class="tbl"><thead><tr>
-      <th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>තත්ත්වය</th>
-      ${opts.table ? "<th>මේසය</th>" : ""}${opts.liquor ? "<th>මත්පැන්</th>" : ""}<th></th>
+      <th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th>
+      ${a.liquor?"<th>මත්පැන්</th>":""}<th></th>
     </tr></thead><tbody id="gtBody"></tbody></table></div>
     <p class="muted" id="gtCount"></p>
-  `);
-  host.appendChild(wrap);
-  const body = $("#gtBody", wrap), search = $("#gtSearch", wrap), count = $("#gtCount", wrap);
-  function draw(list) {
-    body.innerHTML = list.map((g) => `
-      <tr data-id="${g.id}">
-        <td>${esc(g.name)}</td>
-        <td>${esc(g.familyName)}</td>
-        <td>${g.side === "bride" ? "කෞශානි" : "ගෞරව"}</td>
+  `);e.appendChild(l);let d=i("#gtBody",l),n=i("#gtSearch",l),s=i("#gtCount",l);function r(S){d.innerHTML=S.map(c=>`
+      <tr data-id="${c.id}">
+        <td><input class="mini nm" data-id="${c.id}" value="${g(c.name)}" style="min-width:120px"></td>
+        <td><input class="mini fm" data-id="${c.id}" value="${g(c.familyName)}" style="min-width:110px"></td>
+        <td>${c.side==="bride"?"කෞශානි":"ගෞරව"}</td>
+        <td><input class="mini ct" data-id="${c.id}" type="number" min="1" value="${Math.max(1,Number(c.count)||1)}" style="width:60px"></td>
         <td>
-          <select class="mini st" data-id="${g.id}">
-            <option value="pending" ${g.status === "pending" ? "selected" : ""}>පොරොත්තු</option>
-            <option value="confirmed" ${g.status === "confirmed" ? "selected" : ""}>තහවුරු</option>
-            <option value="declined" ${g.status === "declined" ? "selected" : ""}>නොපැමිණේ</option>
+          <select class="mini st" data-id="${c.id}">
+            <option value="pending" ${c.status==="pending"?"selected":""}>පොරොත්තු</option>
+            <option value="confirmed" ${c.status==="confirmed"?"selected":""}>තහවුරු</option>
+            <option value="declined" ${c.status==="declined"?"selected":""}>නොපැමිණේ</option>
           </select>
         </td>
-        ${opts.table ? `<td><input class="mini tn" data-id="${g.id}" type="number" min="1" value="${g.tableNumber ?? ""}" style="width:64px"></td>` : ""}
-        ${opts.liquor ? `<td><input type="checkbox" class="lq" data-id="${g.id}" ${g.takingLiquor ? "checked" : ""}></td>` : ""}
-        <td><button class="btn xs danger del" data-id="${g.id}">මකන්න</button></td>
-      </tr>`).join("");
-    count.textContent = `මුළු: ${list.length}`;
-    $$(".st", body).forEach((sel) => sel.onchange = () => setGuestStatus(sel.dataset.id, sel.value).then(() => toast("තත්ත්වය යාවත්කාලීනයි")));
-    $$(".tn", body).forEach((inp) => inp.onchange = () => setGuestTable(inp.dataset.id, inp.value).then(() => toast("මේසය යාවත්කාලීනයි")));
-    $$(".lq", body).forEach((c) => c.onchange = () => setGuestLiquor(c.dataset.id, c.checked).then(() => toast("යාවත්කාලීනයි")));
-    $$(".del", body).forEach((b) => b.onclick = () => {
-      if (confirmAct("මෙම ආගන්තුකයා මකන්නද?")) deleteGuest(b.dataset.id).then(() => toast("මකා දැමිණි"));
-    });
-  }
-  const apply = () => {
-    const q = search.value.trim().toLowerCase();
-    draw(q ? m.filter((g) => (g.name + " " + g.familyName).toLowerCase().includes(q)) : m);
-  };
-  search.oninput = apply;
-  draw(m);
-}
-function groomGuests(host) {
-  head(host, "ගෞරවගේ ආගන්තුකයෝ", "මනාලයාගේ පාර්ශවය");
-  guestTable(host, (g) => g.side === "groom", { title: "මනාලයාගේ ආගන්තුකයෝ", table: true, liquor: true });
-}
-function brideGuests(host) {
-  head(host, "කෞශානිගේ ආගන්තුකයෝ", "මනාලියගේ පාර්ශවය");
-  guestTable(host, (g) => g.side === "bride", { title: "මනාලියගේ ආගන්තුකයෝ", table: true, liquor: true });
-}
-function confirmed(host) {
-  head(host, "පැමිණීම තහවුරු", "පැමිණෙන බව තහවුරු කළ අය");
-  guestTable(host, (g) => g.status === "confirmed", { title: "තහවුරු වූ අය", table: true, liquor: true });
-}
-function pending(host) {
-  head(host, "පිළිතුරු නොලත්", "තවම පිළිතුරු නොදුන් අය");
-  guestTable(host, (g) => g.status === "pending", { title: "පොරොත්තුවෙන්" });
-}
-function notComing(host) {
-  head(host, "නොපැමිණෙන", "පැමිණිය නොහැකි බව දැනුම් දුන් අය");
-  guestTable(host, (g) => g.status === "declined", { title: "නොපැමිණෙන අය" });
-}
-function changeState(host) {
-  head(host, "තත්ත්වය වෙනස් කිරීම", "ඕනෑම ආගන්තුකයෙකුගේ පිළිතුර සැකසීම");
-  guestTable(host, () => true, { title: "සියලු ආගන්තුකයෝ", table: true, liquor: true });
-}
-function seating(host) {
-  head(host, "මේස වෙන් කිරීම", "ආගන්තුකයන්ට මේස අංක ලබා දෙන්න");
-  guestTable(host, (g) => g.status !== "declined", { title: "මේස වෙන් කිරීම", table: true });
-}
-function liquor(host) {
-  head(host, "මත්පැන් ගණන", "තහවුරු වූ අය අතර මත්පැන් අවශ්‍ය ගණන");
-  const m = mergedGuests().filter((g) => g.status === "confirmed");
-  const yes = m.filter((g) => g.takingLiquor);
-  const stat = (n, l, c = "") => `<div class="stat ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
-  host.appendChild(card(`<div class="stat-grid">
-    ${stat(yes.length, "මත්පැන් අවශ්‍ය", "ok")}
-    ${stat(m.length - yes.length, "අවශ්‍ය නැත")}
-    ${stat(m.length, "මුළු තහවුරු")}
-  </div>`));
-  guestTable(host, (g) => g.status === "confirmed", { title: "තහවුරු වූ අයගේ මත්පැන් කැමැත්ත", liquor: true });
-}
-var AGENDA_ICONS = ["poruwa", "lamp", "lotus", "sesath", "mandala", "mayura", "ring", "feast"];
-function agenda(host) {
-  head(host, "වැඩසටහන සැකසීම", "මංගල දිනයේ වැඩසටහන් පෙළගැස්ම");
-  const add = card(`
-    <h3>නව අයිතමයක්</h3>
+        ${a.liquor?`<td><input type="checkbox" class="lq" data-id="${c.id}" ${c.takingLiquor?"checked":""}></td>`:""}
+        <td><button class="btn xs danger del" data-id="${c.id}">මකන්න</button></td>
+      </tr>`).join("");let C=S.reduce((c,I)=>c+Math.max(1,Number(I.count)||1),0);s.textContent=`මුළු: ${S.length} (පුද්ගලයන් ${C})`,y(".nm",d).forEach(c=>c.onchange=()=>J(c.dataset.id,{name:c.value.trim()}).then(()=>u("නම යාවත්කාලීනයි"))),y(".fm",d).forEach(c=>c.onchange=()=>J(c.dataset.id,{familyName:c.value.trim()}).then(()=>u("පවුල යාවත්කාලීනයි"))),y(".ct",d).forEach(c=>c.onchange=()=>Me(c.dataset.id,Math.max(1,parseInt(c.value,10)||1)).then(()=>u("ගණන යාවත්කාලීනයි"))),y(".st",d).forEach(c=>c.onchange=()=>Te(c.dataset.id,c.value).then(()=>u("තත්ත්වය යාවත්කාලීනයි"))),y(".lq",d).forEach(c=>c.onchange=()=>Le(c.dataset.id,c.checked).then(()=>u("යාවත්කාලීනයි"))),y(".del",d).forEach(c=>c.onclick=async()=>{await G("මෙම ආගන්තුකයා මැකීමට අවශ්‍යද?")&&Ce(c.dataset.id).then(()=>u("මකා දැමිණි"))})}let p=()=>{let S=n.value.trim().toLowerCase();r(S?o.filter(C=>(C.name+" "+C.familyName).toLowerCase().includes(S)):o)};n.oninput=p,r(o)}function vt(e){_(e,"ගෞරවගේ ආගන්තුකයෝ","මනාලයාගේ පාර්ශවය"),D(e,t=>t.side==="groom",{title:"මනාලයාගේ ආගන්තුකයෝ",liquor:!0})}function gt(e){_(e,"කෞශානිගේ ආගන්තුකයෝ","මනාලියගේ පාර්ශවය"),D(e,t=>t.side==="bride",{title:"මනාලියගේ ආගන්තුකයෝ",liquor:!0})}function bt(e){_(e,"පැමිණීම තහවුරු","පැමිණෙන බව තහවුරු කළ අය"),D(e,t=>t.status==="confirmed",{title:"තහවුරු වූ අය",liquor:!0})}function ft(e){_(e,"පිළිතුරු නොලත්","තවම පිළිතුරු නොදුන් අය"),D(e,t=>t.status==="pending",{title:"පොරොත්තුවෙන්"})}function yt(e){_(e,"නොපැමිණෙන","පැමිණිය නොහැකි බව දැනුම් දුන් අය"),D(e,t=>t.status==="declined",{title:"නොපැමිණෙන අය"})}function wt(e){_(e,"තත්ත්වය වෙනස් කිරීම","ඕනෑම ආගන්තුකයෙකුගේ පිළිතුර සැකසීම"),D(e,()=>!0,{title:"සියලු ආගන්තුකයෝ",liquor:!0})}function _t(e){_(e,"මත්පැන් ගණන","තහවුරු වූ අය අතර මත්පැන් අවශ්‍ය ගණන");let t=z().filter(l=>l.status==="confirmed"),a=t.filter(l=>l.takingLiquor),o=(l,d,n="")=>`<div class="stat ${n}"><div class="n">${l}</div><div class="l">${d}</div></div>`;e.appendChild(w(`<div class="stat-grid">
+    ${o(a.length,"මත්පැන් අවශ්‍ය","ok")}
+    ${o(t.length-a.length,"අවශ්‍ය නැත")}
+    ${o(t.length,"මුළු තහවුරු")}
+  </div>`)),D(e,l=>l.status==="confirmed",{title:"තහවුරු වූ අයගේ මත්පැන් කැමැත්ත",liquor:!0})}var ne=["poruwa","lamp","lotus","sesath","mandala","mayura","ring","feast"];function $t(e){_(e,"වැඩසටහන සැකසීම","මංගල දිනයේ වැඩසටහන් පෙළගැස්ම");let t=null,a=w(`
+    <h3 id="ag_formTitle">නව අයිතමයක්</h3>
     <div class="grid2">
       <div class="field"><label>වේලාව</label><input class="input" id="ag_time" placeholder="පෙ.ව. 9.15"></div>
       <div class="field"><label>මාතෘකාව</label><input class="input" id="ag_title" placeholder="පෝරුව මංගල්‍යය"></div>
     </div>
     <div class="field"><label>විස්තරය</label><textarea class="input" id="ag_desc" rows="2"></textarea></div>
     <div class="grid2">
-      <div class="field"><label>අයිකනය</label><select class="input" id="ag_icon">${AGENDA_ICONS.map((i) => `<option value="${i}">${i}</option>`).join("")}</select></div>
-      <div class="field"><label>අනුපිළිවෙළ</label><input class="input" id="ag_order" type="number" value="${S2.agenda.length + 1}"></div>
+      <div class="field"><label>අයිකනය</label><select class="input" id="ag_icon">${ne.map(s=>`<option value="${s}">${s}</option>`).join("")}</select></div>
+      <div class="field"><label>අනුපිළිවෙළ</label><input class="input" id="ag_order" type="number" value="${k.agenda.length+1}"></div>
     </div>
-    <button class="btn primary" id="ag_save">අයිතමය එක් කරන්න</button>
-  `);
-  host.appendChild(add);
-  $("#ag_save").onclick = async () => {
-    const titleSi = $("#ag_title").value.trim();
-    if (!titleSi) {
-      toast("මාතෘකාව ඇතුළත් කරන්න", "warn");
-      return;
-    }
-    await addAgenda({ timeLabel: $("#ag_time").value, titleSi, descSi: $("#ag_desc").value, icon: $("#ag_icon").value, order: Number($("#ag_order").value) || 1, visible: true });
-    $("#ag_title").value = "";
-    $("#ag_desc").value = "";
-    $("#ag_time").value = "";
-    toast("අයිතමය එක් කෙරිණි ✓");
-  };
-  const list = card(`<h3>දැනට ඇති අයිතම</h3><div id="agList"></div>`);
-  host.appendChild(list);
-  const lst = $("#agList", list);
-  const items = [...S2.agenda].sort((a, b) => (a.order || 0) - (b.order || 0));
-  lst.innerHTML = items.length ? items.map((e) => `
+    <div class="row">
+      <button class="btn primary" id="ag_save">අයිතමය එක් කරන්න</button>
+      <button class="btn ghost" id="ag_cancel" hidden>සංස්කරණය අවලංගු</button>
+    </div>
+  `);e.appendChild(a);let o=()=>{t=null,i("#ag_title").value="",i("#ag_desc").value="",i("#ag_time").value="",i("#ag_icon").value=ne[0],i("#ag_order").value=k.agenda.length+1,i("#ag_formTitle").textContent="නව අයිතමයක්",i("#ag_save").textContent="අයිතමය එක් කරන්න",i("#ag_cancel").hidden=!0};i("#ag_cancel").onclick=o,i("#ag_save").onclick=async()=>{let s=i("#ag_title").value.trim();if(!s){u("මාතෘකාව ඇතුළත් කරන්න","warn");return}let r={timeLabel:i("#ag_time").value,titleSi:s,descSi:i("#ag_desc").value,icon:i("#ag_icon").value,order:Number(i("#ag_order").value)||1};try{t?(await Z(t,r),u("අයිතමය යාවත්කාලීන විය ✓")):(await Ie({...r,visible:!0}),u("අයිතමය එක් කෙරිණි ✓")),o()}catch(p){u("දෝෂයක්: "+p.message,"bad")}};let l=w('<h3>දැනට ඇති අයිතම</h3><div id="agList"></div>');e.appendChild(l);let d=i("#agList",l),n=[...k.agenda].sort((s,r)=>(s.order||0)-(r.order||0));d.innerHTML=n.length?n.map(s=>`
     <div class="line">
-      <div><b>${esc(e.timeLabel || "")}</b> · ${esc(e.titleSi || "")} <span class="muted">(${esc(e.icon || "")})</span><br><span class="muted">${esc(e.descSi || "")}</span></div>
+      <div><b>${g(s.timeLabel||"")}</b> · ${g(s.titleSi||"")} <span class="muted">(${g(s.icon||"")})</span><br><span class="muted">${g(s.descSi||"")}</span></div>
       <div class="line-actions">
-        <button class="btn xs ${e.visible === false ? "" : "ghost"} vis" data-id="${e.id}" data-v="${e.visible === false ? 1 : 0}">${e.visible === false ? "පෙන්වන්න" : "සඟවන්න"}</button>
-        <button class="btn xs danger del" data-id="${e.id}">මකන්න</button>
+        <button class="btn xs ghost edit" data-id="${s.id}">සංස්කරණය</button>
+        <button class="btn xs ${s.visible===!1?"":"ghost"} vis" data-id="${s.id}" data-v="${s.visible===!1?1:0}">${s.visible===!1?"පෙන්වන්න":"සඟවන්න"}</button>
+        <button class="btn xs danger del" data-id="${s.id}">මකන්න</button>
       </div>
-    </div>`).join("") : `<p class="muted">තවම අයිතම නැත.</p>`;
-  $$(".vis", lst).forEach((b) => b.onclick = () => updateAgenda(b.dataset.id, { visible: b.dataset.v === "1" }).then(() => toast("යාවත්කාලීනයි")));
-  $$(".del", lst).forEach((b) => b.onclick = () => {
-    if (confirmAct("මෙම අයිතමය මකන්නද?")) deleteAgenda(b.dataset.id).then(() => toast("මකා දැමිණි"));
-  });
-}
-function gallery(host) {
-  head(host, "ඡායාරූප එකතුව", "Cloudinary හරහා උඩුගත කරන්න");
-  const up = card(`
+    </div>`).join(""):'<p class="muted">තවම අයිතම නැත.</p>',y(".edit",d).forEach(s=>s.onclick=()=>{let r=n.find(p=>p.id===s.dataset.id);r&&(t=r.id,i("#ag_time").value=r.timeLabel||"",i("#ag_title").value=r.titleSi||"",i("#ag_desc").value=r.descSi||"",i("#ag_icon").value=r.icon||ne[0],i("#ag_order").value=r.order||1,i("#ag_formTitle").textContent="අයිතමය සංස්කරණය",i("#ag_save").textContent="යාවත් කරන්න",i("#ag_cancel").hidden=!1,i("#ag_title").focus(),i("#ag_title").scrollIntoView({behavior:"smooth",block:"center"}))}),y(".vis",d).forEach(s=>s.onclick=()=>Z(s.dataset.id,{visible:s.dataset.v==="1"}).then(()=>u("යාවත්කාලීනයි"))),y(".del",d).forEach(s=>s.onclick=async()=>{await G("මෙම අයිතමය මකන්නද?")&&De(s.dataset.id).then(()=>u("මකා දැමිණි"))})}function xt(e,t=400){return e.storage==="drive"&&e.fileId?`https://drive.google.com/thumbnail?id=${e.fileId}&sz=w${t}`:e.url&&e.url.includes("/upload/")?e.url.replace("/upload/",`/upload/w_${t},f_auto,q_auto/`):e.url||""}function St(e){_(e,"ඡායාරූප එකතුව","Google Drive හි ගබඩා වේ — මැකූ විට Drive එකෙන්ද ඉවත් වේ");let t=w(`
     <h3>නව ඡායාරූප</h3>
     <input type="file" id="gl_file" accept="image/*" multiple class="input">
     <div class="progress" id="gl_prog" hidden><div class="bar"></div></div>
-    <p class="muted">උඩුගත කිරීම සඳහා Cloudinary "unsigned preset" එක (<code>helasiritha_unsigned</code>) සෑදිය යුතුය — SETUP.md බලන්න.</p>
-  `);
-  host.appendChild(up);
-  const fileInp = $("#gl_file", up), prog = $("#gl_prog", up), bar = $(".bar", prog);
-  fileInp.onchange = async () => {
-    const files = Array.from(fileInp.files || []);
-    if (!files.length) return;
-    prog.hidden = false;
-    for (let i = 0; i < files.length; i++) {
-      try {
-        const res = await uploadToCloudinary(files[i], (p) => {
-          bar.style.width = p + "%";
-        });
-        await addGallery({ url: res.secure_url, alt: files[i].name, order: S2.gallery.length + i + 1 });
-        toast(`උඩුගත විය (${i + 1}/${files.length}) ✓`);
-      } catch (e) {
-        toast("උඩුගත වීම අසාර්ථකයි: " + e.message, "bad");
-      }
-    }
-    bar.style.width = "0%";
-    prog.hidden = true;
-    fileInp.value = "";
-  };
-  const grid = card(`<h3>එකතුව (${S2.gallery.length})</h3><div class="gal-grid" id="galGrid"></div>`);
-  host.appendChild(grid);
-  const gg = $("#galGrid", grid);
-  gg.innerHTML = S2.gallery.length ? S2.gallery.map((g) => `
+    <p class="muted">ඡායාරූප Google Drive ෆෝල්ඩරයට උඩුගත වේ. (Drive උඩුගත කිරීම ක්‍රියාත්මක වන්නේ Vercel යෙදවුමේ පමණි — SETUP.md බලන්න.)</p>
+  `);e.appendChild(t);let a=i("#gl_file",t),o=i("#gl_prog",t),l=i(".bar",o);a.onchange=async()=>{let s=Array.from(a.files||[]);if(s.length){o.hidden=!1;for(let r=0;r<s.length;r++)try{l.style.width="8%";let p=await Ue(s[r],S=>{l.style.width=Math.max(8,S)+"%"});await Ne({fileId:p.fileId,url:p.url,storage:"drive",alt:s[r].name,order:k.gallery.length+r+1}),u(`උඩුගත විය (${r+1}/${s.length}) ✓`)}catch(p){u("උඩුගත වීම අසාර්ථකයි: "+(p.message||p),"bad")}l.style.width="0%",o.hidden=!0,a.value=""}};let d=w(`<h3>එකතුව (${k.gallery.length})</h3><div class="gal-grid" id="galGrid"></div>`);e.appendChild(d);let n=i("#galGrid",d);n.innerHTML=k.gallery.length?k.gallery.map(s=>`
     <div class="gal-cell">
-      <img src="${esc(g.url.replace("/upload/", "/upload/w_300,f_auto,q_auto/"))}" alt="">
-      <button class="btn xs danger del" data-id="${g.id}">මකන්න</button>
-    </div>`).join("") : `<p class="muted">තවම ඡායාරූප නැත.</p>`;
-  $$(".del", gg).forEach((b) => b.onclick = () => {
-    if (confirmAct("මෙම ඡායාරූපය මකන්නද?")) deleteGallery(b.dataset.id).then(() => toast("මකා දැමිණි"));
-  });
-}
-var PRESETS = {
-  "පාරම්පරික රන්වන්": { primary: "#C9A574", secondary: "#F2E5C6", accent: "#A48354", surface: "#FFFBF2", text: "#221C01" },
-  "මැණික් රතු": { primary: "#C8A24B", secondary: "#F6E4C9", accent: "#8E2C2C", surface: "#FFF8EE", text: "#2B1208" },
-  "නෙළුම් රෝස": { primary: "#C99", secondary: "#F7E9EC", accent: "#9C5B72", surface: "#FFF8F6", text: "#2A1822" },
-  "මොණර නිල්": { primary: "#C9A574", secondary: "#E7E0CC", accent: "#23607A", surface: "#FBFAF4", text: "#10222A" }
-};
-function theme(host) {
-  head(host, "වර්ණ සැකසුම්", "පොදු වෙබ් අඩවියේ වර්ණ — සජීවීව වෙනස් වේ");
-  const t = { primary: "#C9A574", secondary: "#F2E5C6", accent: "#A48354", surface: "#FFFBF2", text: "#221C01", ...S2.theme };
-  const cf = (id, label, val) => `<div class="field"><label>${label}</label><div class="color-row"><input type="color" id="${id}" value="${val}"><input class="input" id="${id}_t" value="${val}"></div></div>`;
-  const p = card(`
+      <img loading="lazy" src="${g(xt(s))}" alt="${g(s.alt||"")}">
+      <button class="btn xs danger del" data-id="${s.id}">මකන්න</button>
+    </div>`).join(""):'<p class="muted">තවම ඡායාරූප නැත.</p>',y(".del",n).forEach(s=>s.onclick=async()=>{if(!await G("මෙම ඡායාරූපය මකන්නද? (Google Drive එකෙන්ද ඉවත් වේ)"))return;let r=k.gallery.find(p=>p.id===s.dataset.id);try{r&&r.storage==="drive"&&r.fileId&&ae&&await ae(r.fileId)}catch(p){u("Drive එකෙන් මැකීම අසාර්ථකයි: "+(p.message||p),"warn")}qe(s.dataset.id).then(()=>u("මකා දැමිණි"))})}var Ke={"පාරම්පරික රන්වන්":{primary:"#C9A574",secondary:"#F2E5C6",accent:"#A48354",surface:"#FFFBF2",text:"#221C01"},"මැණික් රතු":{primary:"#C8A24B",secondary:"#F6E4C9",accent:"#8E2C2C",surface:"#FFF8EE",text:"#2B1208"},"නෙළුම් රෝස":{primary:"#C99",secondary:"#F7E9EC",accent:"#9C5B72",surface:"#FFF8F6",text:"#2A1822"},"මොණර නිල්":{primary:"#C9A574",secondary:"#E7E0CC",accent:"#23607A",surface:"#FBFAF4",text:"#10222A"}};function kt(e){_(e,"වර්ණ සැකසුම්","පොදු වෙබ් අඩවියේ වර්ණ — සජීවීව වෙනස් වේ");let t={primary:"#C9A574",secondary:"#F2E5C6",accent:"#A48354",surface:"#FFFBF2",text:"#221C01",...k.theme},a=(d,n,s)=>`<div class="field"><label>${n}</label><div class="color-row"><input type="color" id="${d}" value="${s}"><input class="input" id="${d}_t" value="${s}"></div></div>`,o=w(`
     <div class="field"><label>සූදානම් වර්ණ සැලසුම්</label><div class="preset-row" id="presets">
-      ${Object.keys(PRESETS).map((k) => `<button class="btn xs ghost" data-k="${esc(k)}">${esc(k)}</button>`).join("")}
+      ${Object.keys(Ke).map(d=>`<button class="btn xs ghost" data-k="${g(d)}">${g(d)}</button>`).join("")}
     </div></div>
     <div class="grid2">
-      ${cf("th_primary", "මූලික (රන්වන්)", t.primary)}
-      ${cf("th_secondary", "ද්විතීයික (ක්‍රීම්)", t.secondary)}
-      ${cf("th_accent", "අවධාරක", t.accent)}
-      ${cf("th_surface", "පසුබිම/කාඩ්", t.surface)}
-      ${cf("th_text", "අකුරු", t.text)}
+      ${a("th_primary","මූලික (රන්වන්)",t.primary)}
+      ${a("th_secondary","ද්විතීයික (ක්‍රීම්)",t.secondary)}
+      ${a("th_accent","අවධාරක",t.accent)}
+      ${a("th_surface","පසුබිම/කාඩ්",t.surface)}
+      ${a("th_text","අකුරු",t.text)}
     </div>
     <button class="btn primary" id="th_save">වර්ණ සුරකින්න</button>
-  `);
-  host.appendChild(p);
-  const ids = ["th_primary", "th_secondary", "th_accent", "th_surface", "th_text"];
-  ids.forEach((id) => {
-    const c = $("#" + id), tx = $("#" + id + "_t");
-    c.oninput = () => {
-      tx.value = c.value;
-    };
-    tx.oninput = () => {
-      if (/^#[0-9a-fA-F]{6}$/.test(tx.value)) c.value = tx.value;
-    };
-  });
-  $$("#presets button").forEach((b) => b.onclick = () => {
-    const pr = PRESETS[b.dataset.k];
-    if (!pr) return;
-    $("#th_primary").value = pr.primary;
-    $("#th_primary_t").value = pr.primary;
-    $("#th_secondary").value = pr.secondary;
-    $("#th_secondary_t").value = pr.secondary;
-    $("#th_accent").value = pr.accent;
-    $("#th_accent_t").value = pr.accent;
-    $("#th_surface").value = pr.surface;
-    $("#th_surface_t").value = pr.surface;
-    $("#th_text").value = pr.text;
-    $("#th_text_t").value = pr.text;
-  });
-  $("#th_save").onclick = async () => {
-    await saveTheme({ primary: $("#th_primary").value, secondary: $("#th_secondary").value, accent: $("#th_accent").value, surface: $("#th_surface").value, text: $("#th_text").value });
-    toast("වර්ණ සුරැකිණි — පොදු අඩවියේ සජීවීව වෙනස් වේ ✓");
-  };
-}
-var VIS_FIELDS = [
-  ["invitationCard", "ආරාධනා කාඩ්පත"],
-  ["countdown", "ගණන් කිරීම"],
-  ["rsvp", "පැමිණීම තහවුරු"],
-  ["seating", "අසුන් සෙවීම"],
-  ["agenda", "වැඩසටහන"],
-  ["gallery", "ඡායාරූප"],
-  ["blessings", "සුබ පැතුම් පොත"],
-  ["loveNote", "විශේෂ සටහන"]
-];
-function visibility(host) {
-  head(host, "කොටස් පෙන්වීම / සැඟවීම", "පොදු වෙබ් අඩවියේ කුමන කොටස් පෙන්වයිද");
-  const v = S2.visibility || {};
-  const p = card(`${VIS_FIELDS.map(([k, l]) => `
-    <label class="switch big"><input type="checkbox" id="vis_${k}" ${v[k] !== false ? "checked" : ""}><span></span>${l}</label>`).join("")}
-    <button class="btn primary" id="vis_save" style="margin-top:14px">සුරකින්න</button>`);
-  host.appendChild(p);
-  $("#vis_save").onclick = async () => {
-    const data = {};
-    VIS_FIELDS.forEach(([k]) => data[k] = $("#vis_" + k).checked);
-    await saveVisibility(data);
-    toast("සුරැකිණි ✓");
-  };
-}
-function blessings(host) {
-  head(host, "සුබ පැතුම් අනුමැතිය", "පොදු අඩවියේ දිස්වීමට පෙර අනුමත කරන්න");
-  const list = [...S2.blessings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  const pend = list.filter((b) => !b.approved), appr = list.filter((b) => b.approved);
-  const render = (arr, title) => card(`<h3>${title} (${arr.length})</h3>${arr.length ? arr.map((b) => `
+  `);e.appendChild(o),["th_primary","th_secondary","th_accent","th_surface","th_text"].forEach(d=>{let n=i("#"+d),s=i("#"+d+"_t");n.oninput=()=>{s.value=n.value},s.oninput=()=>{/^#[0-9a-fA-F]{6}$/.test(s.value)&&(n.value=s.value)}}),y("#presets button").forEach(d=>d.onclick=()=>{let n=Ke[d.dataset.k];n&&(i("#th_primary").value=n.primary,i("#th_primary_t").value=n.primary,i("#th_secondary").value=n.secondary,i("#th_secondary_t").value=n.secondary,i("#th_accent").value=n.accent,i("#th_accent_t").value=n.accent,i("#th_surface").value=n.surface,i("#th_surface_t").value=n.surface,i("#th_text").value=n.text,i("#th_text_t").value=n.text)}),i("#th_save").onclick=async()=>{await xe({primary:i("#th_primary").value,secondary:i("#th_secondary").value,accent:i("#th_accent").value,surface:i("#th_surface").value,text:i("#th_text").value}),u("වර්ණ සුරැකිණි — පොදු අඩවියේ සජීවීව වෙනස් වේ ✓")}}var We=[["invitationCard","ආරාධනා කාඩ්පත"],["countdown","ගණන් කිරීම"],["rsvp","පැමිණීම තහවුරු"],["agenda","වැඩසටහන"],["gallery","ඡායාරූප"],["blessings","සුබ පැතුම් පොත"],["loveNote","විශේෂ සටහන"]];function Et(e){_(e,"කොටස් පෙන්වීම / සැඟවීම","පොදු වෙබ් අඩවියේ කුමන කොටස් පෙන්වයිද");let t=k.visibility||{},a=w(`${We.map(([o,l])=>`
+    <label class="switch big"><input type="checkbox" id="vis_${o}" ${t[o]!==!1?"checked":""}><span></span>${l}</label>`).join("")}
+    <button class="btn primary" id="vis_save" style="margin-top:14px">සුරකින්න</button>`);e.appendChild(a),i("#vis_save").onclick=async()=>{let o={};We.forEach(([l])=>o[l]=i("#vis_"+l).checked),await Se(o),u("සුරැකිණි ✓")}}function Ct(e){_(e,"සුබ පැතුම් අනුමැතිය","පොදු අඩවියේ දිස්වීමට පෙර අනුමත කරන්න");let t=[...k.blessings].sort((s,r)=>(r.createdAt||0)-(s.createdAt||0)),a=t.filter(s=>!s.approved),o=t.filter(s=>s.approved),l=(s,r)=>w(`<h3>${r} (${s.length})</h3>${s.length?s.map(p=>`
     <div class="line">
-      <div><i>"${esc(b.message)}"</i><br><span class="muted">— ${esc(b.guestName)}</span></div>
+      <div><i>"${g(p.message)}"</i><br><span class="muted">— ${g(p.guestName)}</span></div>
       <div class="line-actions">
-        ${b.approved ? `<button class="btn xs ghost un" data-id="${b.id}">සැඟවීම</button>` : `<button class="btn xs ok ap" data-id="${b.id}">අනුමත</button>`}
-        <button class="btn xs danger del" data-id="${b.id}">මකන්න</button>
-      </div></div>`).join("") : `<p class="muted">කිසිවක් නැත.</p>`}`);
-  const pe = render(pend, "අනුමැතිය බලාපොරොත්තුවෙන්");
-  host.appendChild(pe);
-  const ap = render(appr, "අනුමත වූ");
-  host.appendChild(ap);
-  $$(".ap", host).forEach((b) => b.onclick = () => approveBlessing(b.dataset.id, true).then(() => toast("අනුමත කෙරිණි ✓")));
-  $$(".un", host).forEach((b) => b.onclick = () => approveBlessing(b.dataset.id, false).then(() => toast("සඟවන ලදී")));
-  $$(".del", host).forEach((b) => b.onclick = () => {
-    if (confirmAct("මකන්නද?")) deleteBlessing(b.dataset.id).then(() => toast("මකා දැමිණි"));
-  });
-}
-function budget(host) {
-  head(host, "අයවැය ගණනය", "මංගල වියදම් සැලසුම");
-  const items = [...S2.budget].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  const total = items.reduce((a, b) => a + (Number(b.amount) || 0), 0);
-  const add = card(`
+        ${p.approved?`<button class="btn xs ghost un" data-id="${p.id}">සැඟවීම</button>`:`<button class="btn xs ok ap" data-id="${p.id}">අනුමත</button>`}
+        <button class="btn xs danger del" data-id="${p.id}">මකන්න</button>
+      </div></div>`).join(""):'<p class="muted">කිසිවක් නැත.</p>'}`),d=l(a,"අනුමැතිය බලාපොරොත්තුවෙන්");e.appendChild(d);let n=l(o,"අනුමත වූ");e.appendChild(n),y(".ap",e).forEach(s=>s.onclick=()=>te(s.dataset.id,!0).then(()=>u("අනුමත කෙරිණි ✓"))),y(".un",e).forEach(s=>s.onclick=()=>te(s.dataset.id,!1).then(()=>u("සඟවන ලදී"))),y(".del",e).forEach(s=>s.onclick=async()=>{await G("මෙම සුබ පැතුම මකන්නද?")&&Oe(s.dataset.id).then(()=>u("මකා දැමිණි"))})}function Mt(e){_(e,"අයවැය ගණනය","මංගල වියදම් සැලසුම");let t=[...k.budget].sort((d,n)=>(d.createdAt||0)-(n.createdAt||0)),a=t.reduce((d,n)=>d+(Number(n.amount)||0),0),o=w(`
     <h3>නව වියදම් අයිතමයක්</h3>
     <div class="grid2">
       <div class="field"><label>විස්තරය</label><input class="input" id="bd_label" placeholder="හෝටල් ගාස්තු"></div>
       <div class="field"><label>මුදල (රු.)</label><input class="input" id="bd_amt" type="number" min="0"></div>
     </div>
-    <button class="btn primary" id="bd_add">එක් කරන්න</button>`);
-  host.appendChild(add);
-  $("#bd_add").onclick = async () => {
-    const label = $("#bd_label").value.trim();
-    const amount = Number($("#bd_amt").value) || 0;
-    if (!label) {
-      toast("විස්තරය ඇතුළත් කරන්න", "warn");
-      return;
-    }
-    await addBudget({ label, amount });
-    $("#bd_label").value = "";
-    $("#bd_amt").value = "";
-    toast("එක් කෙරිණි ✓");
-  };
-  const list = card(`
-    <div class="panel-head"><h3>වියදම් ලැයිස්තුව</h3><div class="big-total">මුළු: ${money(total)}</div></div>
-    ${items.length ? `<table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල</th><th></th></tr></thead><tbody>
-      ${items.map((b) => `<tr><td>${esc(b.label)}</td><td>${money(b.amount)}</td><td><button class="btn xs danger del" data-id="${b.id}">මකන්න</button></td></tr>`).join("")}
-    </tbody></table>` : `<p class="muted">තවම අයිතම නැත.</p>`}`);
-  host.appendChild(list);
-  $$(".del", list).forEach((b) => b.onclick = () => {
-    if (confirmAct("මකන්නද?")) deleteBudget(b.dataset.id).then(() => toast("මකා දැමිණි"));
-  });
-}
-function billing(host) {
-  head(host, "බිල්පත් හා ගෙවීම්", "ගෙවීම් සටහන් කර තබා ගන්න");
-  const items = [...S2.billing].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  const total = items.reduce((a, b) => a + (Number(b.amount) || 0), 0);
-  const paid = items.filter((b) => b.paid).reduce((a, b) => a + (Number(b.amount) || 0), 0);
-  const add = card(`
+    <button class="btn primary" id="bd_add">එක් කරන්න</button>`);e.appendChild(o),i("#bd_add").onclick=async()=>{let d=i("#bd_label").value.trim(),n=Number(i("#bd_amt").value)||0;if(!d){u("විස්තරය ඇතුළත් කරන්න","warn");return}await Ge({label:d,amount:n}),i("#bd_label").value="",i("#bd_amt").value="",u("එක් කෙරිණි ✓")};let l=w(`
+    <div class="panel-head"><h3>වියදම් ලැයිස්තුව</h3><div class="big-total">මුළු: ${se(a)}</div></div>
+    ${t.length?`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල (රු.)</th><th></th></tr></thead><tbody>
+      ${t.map(d=>`<tr data-id="${d.id}">
+        <td><input class="mini bl" data-id="${d.id}" value="${g(d.label)}" style="min-width:160px"></td>
+        <td><input class="mini ba" data-id="${d.id}" type="number" min="0" value="${Number(d.amount)||0}" style="width:120px"></td>
+        <td><button class="btn xs danger del" data-id="${d.id}">මකන්න</button></td></tr>`).join("")}
+    </tbody></table></div>`:'<p class="muted">තවම අයිතම නැත.</p>'}`);e.appendChild(l),y(".bl",l).forEach(d=>d.onchange=()=>ee(d.dataset.id,{label:d.value.trim()}).then(()=>u("යාවත්කාලීනයි"))),y(".ba",l).forEach(d=>d.onchange=()=>ee(d.dataset.id,{amount:Number(d.value)||0}).then(()=>u("යාවත්කාලීනයි"))),y(".del",l).forEach(d=>d.onclick=async()=>{await G("මෙම වියදම් අයිතමය මකන්නද?")&&Be(d.dataset.id).then(()=>u("මකා දැමිණි"))})}function At(e){_(e,"බිල්පත් හා ගෙවීම්","ගෙවීම් සටහන් කර තබා ගන්න");let t=[...k.billing].sort((n,s)=>(n.createdAt||0)-(s.createdAt||0)),a=t.reduce((n,s)=>n+(Number(s.amount)||0),0),o=t.filter(n=>n.paid).reduce((n,s)=>n+(Number(s.amount)||0),0),l=w(`
     <h3>නව ගෙවීමක්</h3>
     <div class="grid2">
       <div class="field"><label>විස්තරය</label><input class="input" id="bl_label" placeholder="කේක් ගෙවීම"></div>
       <div class="field"><label>මුදල (රු.)</label><input class="input" id="bl_amt" type="number" min="0"></div>
     </div>
     <label class="switch"><input type="checkbox" id="bl_paid"><span></span>ගෙවා අවසන්</label>
-    <button class="btn primary" id="bl_add" style="margin-top:8px">එක් කරන්න</button>`);
-  host.appendChild(add);
-  $("#bl_add").onclick = async () => {
-    const label = $("#bl_label").value.trim();
-    if (!label) {
-      toast("විස්තරය ඇතුළත් කරන්න", "warn");
-      return;
-    }
-    await addBilling({ label, amount: Number($("#bl_amt").value) || 0, paid: $("#bl_paid").checked });
-    $("#bl_label").value = "";
-    $("#bl_amt").value = "";
-    $("#bl_paid").checked = false;
-    toast("එක් කෙරිණි ✓");
-  };
-  const list = card(`
-    <div class="panel-head"><h3>ගෙවීම්</h3><div class="big-total">ගෙවා ඇත ${money(paid)} / ${money(total)}</div></div>
-    ${items.length ? `<table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල</th><th>තත්ත්වය</th><th></th></tr></thead><tbody>
-      ${items.map((b) => `<tr><td>${esc(b.label)}</td><td>${money(b.amount)}</td>
-        <td><button class="btn xs ${b.paid ? "ok" : "ghost"} pay" data-id="${b.id}" data-p="${b.paid ? 0 : 1}">${b.paid ? "ගෙවා ඇත" : "ගෙවිය යුතු"}</button></td>
-        <td><button class="btn xs danger del" data-id="${b.id}">මකන්න</button></td></tr>`).join("")}
-    </tbody></table>` : `<p class="muted">තවම ගෙවීම් නැත.</p>`}`);
-  host.appendChild(list);
-  $$(".pay", list).forEach((b) => b.onclick = () => updateBilling(b.dataset.id, { paid: b.dataset.p === "1" }).then(() => toast("යාවත්කාලීනයි")));
-  $$(".del", list).forEach((b) => b.onclick = () => {
-    if (confirmAct("මකන්නද?")) deleteBilling(b.dataset.id).then(() => toast("මකා දැමිණි"));
-  });
-}
-function qr(host) {
-  head(host, "QR කේතය", "පොදු ආරාධනා පිටුවට QR කේතයක්");
-  const url = "https://helasiritha.vercel.app";
-  const p = card(`
-    <div class="field"><label>QR කේතය යොමුවන සබැඳිය</label><input class="input" id="qr_url" value="${url}"></div>
+    <button class="btn primary" id="bl_add" style="margin-top:8px">එක් කරන්න</button>`);e.appendChild(l),i("#bl_add").onclick=async()=>{let n=i("#bl_label").value.trim();if(!n){u("විස්තරය ඇතුළත් කරන්න","warn");return}await Re({label:n,amount:Number(i("#bl_amt").value)||0,paid:i("#bl_paid").checked}),i("#bl_label").value="",i("#bl_amt").value="",i("#bl_paid").checked=!1,u("එක් කෙරිණි ✓")};let d=w(`
+    <div class="panel-head"><h3>ගෙවීම්</h3><div class="big-total">ගෙවා ඇත ${se(o)} / ${se(a)}</div></div>
+    ${t.length?`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල (රු.)</th><th>තත්ත්වය</th><th></th></tr></thead><tbody>
+      ${t.map(n=>`<tr data-id="${n.id}">
+        <td><input class="mini bl" data-id="${n.id}" value="${g(n.label)}" style="min-width:150px"></td>
+        <td><input class="mini ba" data-id="${n.id}" type="number" min="0" value="${Number(n.amount)||0}" style="width:110px"></td>
+        <td><button class="btn xs ${n.paid?"ok":"ghost"} pay" data-id="${n.id}" data-p="${n.paid?0:1}">${n.paid?"ගෙවා ඇත":"ගෙවිය යුතු"}</button></td>
+        <td><button class="btn xs danger del" data-id="${n.id}">මකන්න</button></td></tr>`).join("")}
+    </tbody></table></div>`:'<p class="muted">තවම ගෙවීම් නැත.</p>'}`);e.appendChild(d),y(".bl",d).forEach(n=>n.onchange=()=>U(n.dataset.id,{label:n.value.trim()}).then(()=>u("යාවත්කාලීනයි"))),y(".ba",d).forEach(n=>n.onchange=()=>U(n.dataset.id,{amount:Number(n.value)||0}).then(()=>u("යාවත්කාලීනයි"))),y(".pay",d).forEach(n=>n.onclick=()=>U(n.dataset.id,{paid:n.dataset.p==="1"}).then(()=>u("යාවත්කාලීනයි"))),y(".del",d).forEach(n=>n.onclick=async()=>{await G("මෙම ගෙවීම් අයිතමය මකන්නද?")&&Fe(n.dataset.id).then(()=>u("මකා දැමිණි"))})}function Tt(e){_(e,"QR කේතය","පොදු ආරාධනා පිටුවට QR කේතයක්");let t="https://helasiritha.vercel.app",a=w(`
+    <div class="field"><label>QR කේතය යොමුවන සබැඳිය</label><input class="input" id="qr_url" value="${t}"></div>
     <div class="qr-stage">
-      <img id="qr_img" alt="QR" width="300" height="300" src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(url)}">
+      <img id="qr_img" alt="QR" width="300" height="300" src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(t)}">
     </div>
     <div class="row">
       <button class="btn primary" id="qr_gen">යළි සෑදීම</button>
-      <a class="btn ghost" id="qr_dl" download="helasiritha-qr.png" href="https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(url)}" target="_blank" rel="noopener">බාගත කරන්න</a>
+      <a class="btn ghost" id="qr_dl" download="helasiritha-qr.png" href="https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(t)}" target="_blank" rel="noopener">බාගත කරන්න</a>
     </div>
-    <p class="muted">මෙය මුද්‍රණය කර මංගල ආරාධනා පත්‍රවල හෝ වෙබ් අඩවියේ බෙදාගත හැක.</p>`);
-  host.appendChild(p);
-  const gen = () => {
-    const u = $("#qr_url").value.trim() || url;
-    $("#qr_img").src = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(u)}`;
-    $("#qr_dl").href = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(u)}`;
-  };
-  $("#qr_gen").onclick = gen;
-}
+    <p class="muted">මෙය මුද්‍රණය කර මංගල ආරාධනා පත්‍රවල හෝ වෙබ් අඩවියේ බෙදාගත හැක.</p>`);e.appendChild(a);let o=()=>{let l=i("#qr_url").value.trim()||t;i("#qr_img").src=`https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(l)}`,i("#qr_dl").href=`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(l)}`};i("#qr_gen").onclick=o}var v=(e,t=document)=>t.querySelector(e),Ze=(e,t=document)=>Array.from(t.querySelectorAll(e)),Qe={grid:"M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",ring:"M12 7a5 5 0 100 10 5 5 0 000-10zM9 3l3 3 3-3",plus:"M12 5v14M5 12h14",man:"M12 8a3 3 0 100-6 3 3 0 000 6zM6 21v-2a6 6 0 0112 0v2",woman:"M12 8a3 3 0 100-6 3 3 0 000 6zM12 11v10M9 18h6",check:"M20 6L9 17l-5-5",clock:"M12 7v5l3 3M12 3a9 9 0 100 18 9 9 0 000-18z",x:"M6 6l12 12M18 6L6 18",swap:"M7 7h11l-3-3M17 17H6l3 3",table:"M3 5h18v14H3zM3 10h18M9 5v14",cup:"M5 4h12v6a6 6 0 01-12 0zM17 6h2a2 2 0 010 4h-2M5 20h12",list:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",image:"M3 5h18v14H3zM8 11l3 3 5-6 4 5",paint:"M12 3a9 9 0 000 18c1 0 1-1 1-2a2 2 0 012-2h2a3 3 0 003-3 7 7 0 00-11-11z",eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z",heart:"M12 21s-7-4.5-10-9a4 4 0 017-3 4 4 0 017 3c-3 4.5-10 9-10 9z",calc:"M5 3h14v18H5zM9 7h6M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01",card:"M2 6h20v12H2zM2 10h20",qr:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v3M17 20h4"},Lt=e=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${Qe[e]||Qe.grid}"/></svg>`,X="dashboard",le=!1;function It(e){v("#app").hidden=!0,v("#login").hidden=!1,e==="forbidden"&&(v("#loginErr").textContent=F("auth/not-admin"))}function Dt(){v("#googleBtn").onclick=async()=>{v("#loginErr").textContent="";try{await me()}catch(e){v("#loginErr").textContent=F(e.code)}},v("#loginForm").addEventListener("submit",async e=>{e.preventDefault(),v("#loginErr").textContent="";let t=v("#loginSubmit");t.disabled=!0,t.textContent="පිවිසෙමින්…";try{await pe(v("#email").value,v("#password").value)}catch(a){v("#loginErr").textContent=F(a.code)}t.disabled=!1,t.textContent="පිවිසෙන්න"}),v("#forgotBtn").onclick=async()=>{let e=v("#email").value.trim()||R;try{await he(e),u("මුරපද යළි පිහිටුවීමේ ඊමේල් එවන ලදී.")}catch(t){v("#loginErr").textContent=F(t.code)}}}function Nt(e){v("#login").hidden=!0,v("#app").hidden=!1,v("#whoami").textContent=e.email,le||(le=!0,_e(),qt()),et(X)}function qt(){let e=v("#nav"),t={};de.forEach(a=>{(t[a.group]=t[a.group]||[]).push(a)}),e.innerHTML=Object.entries(t).map(([a,o])=>`
+    <div class="nav-group"><div class="nav-group-label">${a}</div>
+      ${o.map(l=>`<button class="nav-item" data-key="${l.key}">${Lt(l.icon)}<span>${l.label}</span></button>`).join("")}
+    </div>`).join(""),Ze(".nav-item",e).forEach(a=>a.onclick=()=>{et(a.dataset.key),Gt()})}function et(e){X=e,Ze(".nav-item").forEach(a=>a.classList.toggle("active",a.dataset.key===e));let t=de.find(a=>a.key===e);v("#crumb").textContent=t?t.label:"",oe(e,v("#main")),v("#main").scrollTop=0}var Je;we(()=>{if(!le||!Ye.has(X))return;let e=document.activeElement;e&&e.closest&&e.closest("#main")&&/INPUT|TEXTAREA|SELECT/.test(e.tagName)&&e.type!=="checkbox"||(clearTimeout(Je),Je=setTimeout(()=>oe(X,v("#main")),350))});v("#logoutBtn").onclick=async()=>{await ve(),u("පිටවිය.")};v("#menuBtn").onclick=()=>v("#sidebar").classList.toggle("open");function Gt(){window.matchMedia("(max-width:900px)").matches&&v("#sidebar").classList.remove("open")}v("#scrim").onclick=()=>v("#sidebar").classList.remove("open");Dt();ue(Nt,It);
 
-// release/helasiritha-admin/assets/js/admin.js
-var $2 = (s, r = document) => r.querySelector(s);
-var $$2 = (s, r = document) => Array.from(r.querySelectorAll(s));
-var ICONS = {
-  grid: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
-  ring: "M12 7a5 5 0 100 10 5 5 0 000-10zM9 3l3 3 3-3",
-  plus: "M12 5v14M5 12h14",
-  man: "M12 8a3 3 0 100-6 3 3 0 000 6zM6 21v-2a6 6 0 0112 0v2",
-  woman: "M12 8a3 3 0 100-6 3 3 0 000 6zM12 11v10M9 18h6",
-  check: "M20 6L9 17l-5-5",
-  clock: "M12 7v5l3 3M12 3a9 9 0 100 18 9 9 0 000-18z",
-  x: "M6 6l12 12M18 6L6 18",
-  swap: "M7 7h11l-3-3M17 17H6l3 3",
-  table: "M3 5h18v14H3zM3 10h18M9 5v14",
-  cup: "M5 4h12v6a6 6 0 01-12 0zM17 6h2a2 2 0 010 4h-2M5 20h12",
-  list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-  image: "M3 5h18v14H3zM8 11l3 3 5-6 4 5",
-  paint: "M12 3a9 9 0 000 18c1 0 1-1 1-2a2 2 0 012-2h2a3 3 0 003-3 7 7 0 00-11-11z",
-  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z",
-  heart: "M12 21s-7-4.5-10-9a4 4 0 017-3 4 4 0 017 3c-3 4.5-10 9-10 9z",
-  calc: "M5 3h14v18H5zM9 7h6M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01",
-  card: "M2 6h20v12H2zM2 10h20",
-  qr: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v3M17 20h4"
-};
-var icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[k] || ICONS.grid}"/></svg>`;
-var active = "dashboard";
-var started = false;
-function showLogin(reason) {
-  $2("#app").hidden = true;
-  $2("#login").hidden = false;
-  if (reason === "forbidden") $2("#loginErr").textContent = authErrorSi("auth/not-admin");
-}
-function wireLogin() {
-  $2("#googleBtn").onclick = async () => {
-    $2("#loginErr").textContent = "";
-    try {
-      await signInWithGoogle();
-    } catch (e) {
-      $2("#loginErr").textContent = authErrorSi(e.code);
-    }
-  };
-  $2("#loginForm").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    $2("#loginErr").textContent = "";
-    const btn = $2("#loginSubmit");
-    btn.disabled = true;
-    btn.textContent = "පිවිසෙමින්…";
-    try {
-      await signIn($2("#email").value, $2("#password").value);
-    } catch (e) {
-      $2("#loginErr").textContent = authErrorSi(e.code);
-    }
-    btn.disabled = false;
-    btn.textContent = "පිවිසෙන්න";
-  });
-  $2("#forgotBtn").onclick = async () => {
-    const em = $2("#email").value.trim() || ADMIN_EMAIL;
-    try {
-      await resetPassword(em);
-      toast("මුරපද යළි පිහිටුවීමේ ඊමේල් එවන ලදී.");
-    } catch (e) {
-      $2("#loginErr").textContent = authErrorSi(e.code);
-    }
-  };
-}
-function showApp(user) {
-  $2("#login").hidden = true;
-  $2("#app").hidden = false;
-  $2("#whoami").textContent = user.email;
-  if (!started) {
-    started = true;
-    startAdminRealtime();
-    buildSidebar();
-  }
-  go(active);
-}
-function buildSidebar() {
-  const nav = $2("#nav");
-  const groups = {};
-  MODULES.forEach((m) => {
-    (groups[m.group] = groups[m.group] || []).push(m);
-  });
-  nav.innerHTML = Object.entries(groups).map(([g, mods]) => `
-    <div class="nav-group"><div class="nav-group-label">${g}</div>
-      ${mods.map((m) => `<button class="nav-item" data-key="${m.key}">${icon(m.icon)}<span>${m.label}</span></button>`).join("")}
-    </div>`).join("");
-  $$2(".nav-item", nav).forEach((b) => b.onclick = () => {
-    go(b.dataset.key);
-    closeSidebarMobile();
-  });
-}
-function go(key) {
-  active = key;
-  $$2(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.key === key));
-  const m = MODULES.find((x) => x.key === key);
-  $2("#crumb").textContent = m ? m.label : "";
-  renderModule(key, $2("#main"));
-  $2("#main").scrollTop = 0;
-}
-var liveTimer;
-onChange(() => {
-  if (!started || !LIVE.has(active)) return;
-  const ae = document.activeElement;
-  if (ae && ae.closest && ae.closest("#main") && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "checkbox") return;
-  clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => renderModule(active, $2("#main")), 350);
-});
-$2("#logoutBtn").onclick = async () => {
-  await signOutAdmin();
-  toast("පිටවිය.");
-};
-$2("#menuBtn").onclick = () => $2("#sidebar").classList.toggle("open");
-function closeSidebarMobile() {
-  if (window.matchMedia("(max-width:900px)").matches) $2("#sidebar").classList.remove("open");
-}
-$2("#scrim").onclick = () => $2("#sidebar").classList.remove("open");
-wireLogin();
-watchAuth(showApp, showLogin);
-
-  </script>
+</script>
 </body>
 </html>
