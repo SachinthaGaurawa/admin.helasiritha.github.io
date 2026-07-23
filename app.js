@@ -184,6 +184,7 @@ let theme     = Object.assign({}, THEME_DEFAULT);
 let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [];
 let visitsCapped = false, signMode = "unknown";
 let sessionStart = Date.now(), lastActivity = Date.now();
+let upTestReport = "";
 let rsvpMap = {};
 let current = "dashboard";
 let subsStarted = false;
@@ -1750,31 +1751,50 @@ window.addEventListener("offline", () => syncState(false));
    and the public unsigned preset can then be switched off in Cloudinary. On a
    host without functions (GitHub Pages) it degrades to the unsigned preset.
    ════════════════════════════════════════════════════════════════════════════ */
+let signDiag = { state: "untested", status: 0, reason: "" };
 async function getSignature(paramsToSign) {
   try {
-    const u = auth.currentUser; if (!u) return null;
-    const token = await u.getIdToken();          // proves who is asking
+    const u = auth.currentUser;
+    if (!u) { signDiag = { state: "fail", status: 0, reason: "not signed in" }; return null; }
+    const token = await u.getIdToken();          /* proves who is asking */
     const r = await fetch(SIGN_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
       body: JSON.stringify(paramsToSign)
     });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return (j && j.signature && j.apiKey && j.cloudName) ? j : null;
-  } catch (_) { return null; }
+    let j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!r.ok) {
+      signDiag = { state: "fail", status: r.status,
+                   reason: (j && (j.message || j.error)) || ("HTTP " + r.status) };
+      return null;
+    }
+    if (!(j && j.signature && j.apiKey && j.cloudName)) {
+      signDiag = { state: "fail", status: r.status, reason: "incomplete signature response" };
+      return null;
+    }
+    signDiag = { state: "ok", status: 200, reason: "signed uploads active" };
+    return j;
+  } catch (e) {
+    /* 404 on a host without functions (e.g. GitHub Pages) lands here too */
+    signDiag = { state: "fail", status: 0, reason: (e && e.message) || "endpoint unreachable" };
+    return null;
+  }
 }
 uploadImage = function (file, onProgress) {
   return new Promise(async (resolve, reject) => {
     const blob = await downscale(file);
-    const ts = Math.round(Date.now() / 1000);
-    const sig = await getSignature({ timestamp: ts, folder: "helasiritha" });
+    const sig = await getSignature({ timestamp: Math.round(Date.now() / 1000), folder: "helasiritha" });
     signMode = sig ? "signed" : "unsigned";
     const fd = new FormData();
     fd.append("file", blob);
     if (sig) {
-      fd.append("api_key", sig.apiKey); fd.append("timestamp", String(ts));
-      fd.append("folder", "helasiritha"); fd.append("signature", sig.signature);
+      /* echo back exactly what the server signed — a drifting device clock can
+         no longer invalidate the signature */
+      fd.append("api_key", sig.apiKey);
+      fd.append("timestamp", String(sig.timestamp));
+      fd.append("folder", sig.folder || "helasiritha");
+      fd.append("signature", sig.signature);
     } else {
       fd.append("upload_preset", CLOUD.preset);
     }
@@ -1785,13 +1805,34 @@ uploadImage = function (file, onProgress) {
     xhr.onload = () => {
       try {
         const j = JSON.parse(xhr.responseText);
-        j.secure_url ? resolve(j) : reject(new Error((j.error && j.error.message) || "උඩුගත කිරීම අසාර්ථකයි"));
+        if (j.secure_url) { resolve(j); return; }
+        const raw = (j.error && j.error.message) || "උඩුගත කිරීම අසාර්ථකයි";
+        reject(new Error(explainUploadError(raw)));
       } catch (err) { reject(err); }
     };
     xhr.onerror = () => reject(new Error("ජාල දෝෂයකි"));
     xhr.send(fd);
   });
 };
+
+/* Cloudinary's raw messages are opaque. Translate the ones that actually happen
+   into the exact action that fixes them. */
+function explainUploadError(raw) {
+  const m = String(raw || "");
+  if (/preset/i.test(m)) {
+    return "Upload preset හමු නොවීය. " +
+      (signDiag.state === "ok"
+        ? "නමුත් signed මාදිලිය සක්‍රීයයි — නැවත උත්සාහ කරන්න."
+        : "Signed මාදිලිය ක්‍රියා නොකරයි (" + (signDiag.reason || "?") +
+          "). ආරක්ෂාව → “උඩුගත කිරීම පරීක්ෂා කරන්න” බලන්න, නැතහොත් Cloudinary හි " +
+          "unsigned preset එකක් “" + CLOUD.preset + "” නමින් සාදන්න.");
+  }
+  if (/signature/i.test(m)) return "Signature වලංගු නොවේ — CLOUDINARY_API_SECRET නිවැරදිද බලන්න.";
+  if (/api_key|api key/i.test(m)) return "CLOUDINARY_API_KEY වැරදියි.";
+  if (/File size too large|too large/i.test(m)) return "ගොනුව විශාල වැඩියි — කුඩා ඡායාරූපයක් උත්සාහ කරන්න.";
+  if (/Invalid image file|unsupported/i.test(m)) return "මෙම ගොනු වර්ගය සහාය නොදක්වයි (JPG / PNG / WEBP භාවිතා කරන්න).";
+  return m;
+}
 
 /* ════════════════════ v2 · VISIT ANALYTICS ════════════════════ */
 const dayKey = (d) => {
@@ -1945,8 +1986,12 @@ renderers.security = function () {
       row(true, "තනි පරිපාලක ගිණුම තහවුරුයි", esc((u && u.email) || "—") + " · Google OAuth") +
       row(!!(u && u.emailVerified), "විද්‍යුත් තැපෑල තහවුරු කර ඇත", (u && u.emailVerified) ? "Firestore rules සඳහා අවශ්‍යයි" : "තහවුරු කර නැත") +
       row(https, "සම්බන්ධතාවය සංකේතනය කර ඇත", https ? "HTTPS" : "HTTP — ආරක්ෂිත නොවේ") +
-      row(signMode !== "unsigned", "ඡායාරූප උඩුගත කිරීම", signMode === "signed" ? "Signed (server-side secret) ✓"
-        : signMode === "unsigned" ? "Unsigned preset — /api/sign-upload යෙදුවොත් වඩාත් ආරක්ෂිතයි" : "තවම උඩුගත කර නැත") +
+      row(signDiag.state === "ok", "ඡායාරූප උඩුගත කිරීම",
+        signDiag.state === "ok" ? "Signed — රහස server එකේ ✓"
+        : signDiag.state === "fail" ? "Signed ක්‍රියා නොකරයි: " + esc(signDiag.reason) + (signDiag.status ? " (HTTP " + signDiag.status + ")" : "")
+        : "තවම පරීක්ෂා කර නැත — පහත බොත්තම ඔබන්න") +
+      '<div class="row" style="margin:2px 0 8px"><button class="btn sm primary" id="secTestUp" type="button">උඩුගත කිරීම පරීක්ෂා කරන්න</button></div>' +
+      '<pre id="upTest" class="up-test"' + (upTestReport ? '>' + esc(upTestReport) : ' hidden>') + '</pre>' +
       '<div class="row" style="margin-top:6px">' +
         '<span class="faint" style="font-size:.8rem">සැසිය මිනිත්තු ' + mins + 'ක් · අක්‍රීය මිනිත්තු 20කින් ස්වයංක්‍රීයව පිටවේ</span>' +
         '<span class="sp" style="flex:1"></span>' +
@@ -1967,6 +2012,61 @@ renderers.security = function () {
             '<div class="who">' + esc(a.email || "") + ' · ' +
             esc(a.ts && a.ts.seconds ? new Date(a.ts.seconds * 1000).toLocaleString("si-LK") : "") + '</div></div></div>').join("") + '</div>'
         : '<div class="empty">තවම සටහන් නැත. (rules deploy කළ පසු ක්‍රියාත්මක වේ)</div>'));
+
+  /* One tap tells you exactly what the uploader will do and why. */
+  $("#secTestUp").onclick = async () => {
+    const btn = $("#secTestUp");
+    const paint = (txt) => {
+      upTestReport = txt;
+      const el = $("#upTest");
+      if (el) { el.hidden = false; el.textContent = txt; }
+    };
+    paint("පරීක්ෂා කරමින්…");
+    btn.disabled = true;
+    const lines = [];
+    /* 1 — is the function deployed at all, and is it configured? */
+    try {
+      const r = await fetch(SIGN_ENDPOINT, { method: "GET", cache: "no-store" });
+      lines.push("GET  " + SIGN_ENDPOINT + "  →  HTTP " + r.status);
+      if (r.status === 404 || r.status === 405) {
+        lines.push("  ⚠ Serverless function එක හමු නොවීය.");
+        lines.push("    • Vercel නම්: repo එකේ  api/sign-upload.js  තිබේද? redeploy කරන්න.");
+        lines.push("    • GitHub Pages නම්: functions නැත → Cloudinary හි unsigned preset");
+        lines.push("      “" + CLOUD.preset + "” නමින් සාදන්න (Settings → Upload → Add upload preset,");
+        lines.push("      Signing mode = Unsigned).");
+      } else {
+        let j = null; try { j = await r.json(); } catch (_) {}
+        if (j && j.configured) {
+          const c = j.configured;
+          lines.push("  CLOUDINARY_CLOUD_NAME : " + (c.cloudName ? "✓" : "✗ නැත"));
+          lines.push("  CLOUDINARY_API_KEY    : " + (c.apiKey ? "✓" : "✗ නැත"));
+          lines.push("  CLOUDINARY_API_SECRET : " + (c.apiSecret ? "✓" : "✗ නැත"));
+          lines.push("  Firebase key          : " + (c.firebaseKey ? "✓" : "✗"));
+          lines.push("  සූදානම්               : " + (j.ready ? "✓ ඔව්" : "✗ නැත"));
+          if (!j.ready) lines.push("  ⚠ Vercel → Settings → Environment Variables වල නැති ඒවා දමා redeploy කරන්න.");
+        }
+      }
+    } catch (e) {
+      lines.push("GET " + SIGN_ENDPOINT + " → ළඟා විය නොහැක (" + ((e && e.message) || "?") + ")");
+    }
+    /* 2 — actually request a signature the same way an upload would */
+    const sig = await getSignature({ timestamp: Math.round(Date.now() / 1000), folder: "helasiritha" });
+    lines.push("");
+    lines.push("POST (signature request) → " + (sig ? "HTTP 200 ✓" : "අසාර්ථක: " + signDiag.reason +
+      (signDiag.status ? " (HTTP " + signDiag.status + ")" : "")));
+    if (sig) {
+      lines.push("  cloud   : " + sig.cloudName);
+      lines.push("  folder  : " + sig.folder);
+      lines.push("  ts      : " + sig.timestamp + "  (server clock)");
+      lines.push("  එබැවින් preset එකක් අවශ්‍ය නැත. ඡායාරූප දැන් උඩුගත වේ. ✓");
+    }
+    /* store first, then re-render — the report survives the refresh */
+    upTestReport = lines.join("\n");
+    btn.disabled = false;
+    renderers.security();
+    paint(upTestReport);
+    toast(sig ? "Signed උඩුගත කිරීම සූදානම් ✓" : "උඩුගත කිරීම සකසා නැත — විස්තර බලන්න", sig ? "ok" : "err");
+  };
 
   $("#secOut").onclick = async () => {
     enteredAt = 0; await signOut(auth).catch(() => {});
