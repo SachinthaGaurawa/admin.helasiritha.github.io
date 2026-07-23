@@ -1007,6 +1007,8 @@ async function connect() {
     const db = fs.getFirestore(app);
     fb = { db, addDoc: fs.addDoc, collection: fs.collection, doc: fs.doc, setDoc: fs.setDoc, serverTimestamp: fs.serverTimestamp };
 
+    trackVisit(fs, db);
+
     fs.onSnapshot(fs.doc(db, "site", "content"), (snap) => {
       const data = snap.exists() ? snap.data() : {};
       S = Object.assign({}, DEFAULTS, data);
@@ -1053,6 +1055,42 @@ async function connect() {
   } catch (err) {
     console.warn("Firestore offline — running on built-in content.", err);
   }
+}
+
+/* Anonymous arrival telemetry for the admin dashboard.
+   Records ONE row per browser session — never an IP, cookie or identifier.
+     • ?src=qr  (printed invitation QR)  → "qr"
+     • arrived from another site/app     → "web"
+     • typed the address / bookmark      → "direct"
+   Any failure is silent: telemetry must never affect a guest's experience. */
+function trackVisit(fs, db) {
+  try {
+    if (sessionStorage.getItem("hs_visited") === "1") return;
+    sessionStorage.setItem("hs_visited", "1");
+
+    const q = new URLSearchParams(location.search);
+    const src = String(q.get("src") || "").trim().toLowerCase();
+    let kind = "direct";
+    if (src === "qr") kind = "qr";
+    else if (src === "web") kind = "web";
+    else if (document.referrer) {
+      let host = "";
+      try { host = new URL(document.referrer).hostname; } catch (_) {}
+      if (host && host !== location.hostname) kind = "web";
+    }
+
+    const p = (n) => String(n).padStart(2, "0");
+    const d = new Date();
+    const day = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+
+    fs.addDoc(fs.collection(db, "visits"), {
+      kind, day,
+      ref: String(document.referrer || "").slice(0, 200),
+      lang: String(LANG || "si").slice(0, 4),
+      ua: String(navigator.userAgent || "").slice(0, 200),
+      ts: fs.serverTimestamp()
+    }).catch(() => {});
+  } catch (_) { /* telemetry is strictly best-effort */ }
 }
 
 /* ════════════════════════════════ INIT ═══════════════════════════════════ */

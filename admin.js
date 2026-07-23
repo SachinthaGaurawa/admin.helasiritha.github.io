@@ -17,7 +17,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc,
-  writeBatch, serverTimestamp
+  writeBatch, serverTimestamp, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 /* ── configuration (public web config — safety comes from Auth + Rules) ───── */
@@ -33,6 +33,13 @@ const FB = {
 const ADMIN_EMAIL = "gaurawasachintha@gmail.com";
 const CLOUD = { name: "dzrfpc9be", preset: "helasiritha_unsigned" };
 const XLSX_CDN = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+const QR_CDN   = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";
+const PUBLIC_SITE = "https://helasiritha.vercel.app";
+/* Serverless signing endpoint (Vercel). If it is absent (e.g. GitHub Pages) the
+   uploader transparently falls back to the unsigned preset. */
+const SIGN_ENDPOINT = "/api/sign-upload";
+const IDLE_LOGOUT_MS = 20 * 60 * 1000;   // auto sign-out after 20 min idle
+const VISIT_KINDS = ["qr", "web", "direct"];
 
 const app  = initializeApp(FB);
 const auth = getAuth(app);
@@ -149,7 +156,8 @@ const DAY_TA = ["ஞாயிற்றுக்கிழமை","திங்க
 let content   = Object.assign({}, CONTENT_DEFAULT);
 let agenda    = AGENDA_DEFAULT.slice();
 let theme     = Object.assign({}, THEME_DEFAULT);
-let gallery = [], guests = [], rsvps = [], blessings = [];
+let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [];
+let visitsCapped = false, signMode = "unknown";
 let rsvpMap = {};
 let current = "dashboard";
 let subsStarted = false;
@@ -293,6 +301,19 @@ function startSubscriptions() {
     refresh("rsvp"); refresh("guests"); refresh("seating"); refresh("dashboard");
   }, warn("rsvps"));
 
+  /* Visit telemetry written by the public site (QR / web / direct). */
+  onSnapshot(query(collection(db, "visits"), orderBy("ts", "desc"), limit(5000)), (qs) => {
+    const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
+    visits = a; visitsCapped = a.length >= 5000;
+    refresh("analytics"); refresh("dashboard");
+  }, warn("visits"));
+
+  /* Append-only administrative audit trail. */
+  onSnapshot(query(collection(db, "audit"), orderBy("ts", "desc"), limit(200)), (qs) => {
+    const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
+    audit = a; refresh("security");
+  }, warn("audit"));
+
   /* Blessings: the security rules restrict per-document reads, so an admin
      listen is permitted (isAdmin() is document-independent). */
   onSnapshot(collection(db, "blessings"), (qs) => {
@@ -327,17 +348,32 @@ function refresh(panel) {
 }
 
 /* ════════════════════════ FIRESTORE WRITES ═════════════════════════════════ */
-const saveContent = (patch) => setDoc(doc(db, "site", "content"), Object.assign({}, patch, { updatedAt: Date.now() }), { merge: true });
-const saveAgenda  = (items) => setDoc(doc(db, "site", "agenda"), { items, updatedAt: Date.now() }, { merge: true });
-const saveTheme   = (t)     => setDoc(doc(db, "site", "theme"), Object.assign({}, t, { updatedAt: Date.now() }), { merge: true });
-const addGuest    = (o)     => addDoc(collection(db, "guests"), Object.assign({ ts: serverTimestamp() }, o));
+/* Tamper-evident audit trail: every administrative mutation is appended to the
+   `audit` collection (append-only in the security rules — not even the admin can
+   edit or delete an entry). Failures never block the underlying operation. */
+function logAudit(action, target) {
+  try {
+    const u = auth.currentUser; if (!u) return;
+    addDoc(collection(db, "audit"), {
+      email: u.email || "", action: String(action).slice(0, 60),
+      target: String(target == null ? "" : target).slice(0, 180), ts: serverTimestamp()
+    }).catch(() => {});
+  } catch (_) {}
+}
+const withAudit = (promise, action, target) =>
+  promise.then((r) => { logAudit(action, target); return r; });
+
+const saveContent = (patch) => withAudit(setDoc(doc(db, "site", "content"), Object.assign({}, patch, { updatedAt: Date.now() }), { merge: true }), "content.save", Object.keys(patch).slice(0, 6).join(","));
+const saveAgenda  = (items) => withAudit(setDoc(doc(db, "site", "agenda"), { items, updatedAt: Date.now() }, { merge: true }), "agenda.save", items.length + " items");
+const saveTheme   = (t)     => withAudit(setDoc(doc(db, "site", "theme"), Object.assign({}, t, { updatedAt: Date.now() }), { merge: true }), "theme.save", t.primary || "");
+const addGuest    = (o)     => withAudit(addDoc(collection(db, "guests"), Object.assign({ ts: serverTimestamp() }, o)), "guest.add", o.name);
 const updGuest    = (id, o) => updateDoc(doc(db, "guests", id), o);
-const delGuest    = (id)    => deleteDoc(doc(db, "guests", id));
+const delGuest    = (id)    => withAudit(deleteDoc(doc(db, "guests", id)), "guest.delete", id);
 const addGalleryItem = (o)  => addDoc(collection(db, "gallery"), Object.assign({ ts: serverTimestamp() }, o));
 const updGallery  = (id, o) => updateDoc(doc(db, "gallery", id), o);
-const delGallery  = (id)    => deleteDoc(doc(db, "gallery", id));
-const updBlessing = (id, o) => updateDoc(doc(db, "blessings", id), o);
-const delBlessing = (id)    => deleteDoc(doc(db, "blessings", id));
+const delGallery  = (id)    => withAudit(deleteDoc(doc(db, "gallery", id)), "gallery.delete", id);
+const updBlessing = (id, o) => withAudit(updateDoc(doc(db, "blessings", id), o), "blessing." + (o.approved ? "approve" : "hide"), id);
+const delBlessing = (id)    => withAudit(deleteDoc(doc(db, "blessings", id)), "blessing.delete", id);
 const delRsvp     = (id)    => deleteDoc(doc(db, "rsvps", id));
 function setRsvp(g, patch) {
   return setDoc(doc(db, "rsvps", g.id), Object.assign({
@@ -393,7 +429,10 @@ const ICONS = {
   heart:"M12 21s-7-4.5-10-9a4 4 0 017-3 4 4 0 017 3c-3 4.5-10 9-10 9z",
   eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z",
   paint:"M12 3a9 9 0 000 18c1 0 1-1 1-2a2 2 0 012-2h2a3 3 0 003-3 7 7 0 00-11-11z",
-  table:"M3 5h18v14H3zM3 10h18M9 5v14"
+  table:"M3 5h18v14H3zM3 10h18M9 5v14",
+  chart:"M3 3v18h18M7 15l3-4 3 3 5-7",
+  qr:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 20h1M17 20v1",
+  shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"
 };
 const NAV = [
   { group: "මූලික",   items: [
@@ -410,9 +449,16 @@ const NAV = [
     { key: "gallery",    label: "ඡායාරූප එකතුව",     icon: "image" },
     { key: "blessings",  label: "සුබ පැතුම් අනුමැතිය", icon: "heart", badge: true }
   ]},
+  { group: "විශ්ලේෂණ", items: [
+    { key: "analytics",  label: "පැමිණීම් විශ්ලේෂණය",  icon: "chart" },
+    { key: "qr",         label: "QR කේත මධ්‍යස්ථානය",  icon: "qr" }
+  ]},
   { group: "පෙනුම",    items: [
     { key: "visibility", label: "කොටස් පෙන්වීම",     icon: "eye" },
     { key: "theme",      label: "වර්ණ සැකසුම්",      icon: "paint" }
+  ]},
+  { group: "ආරක්ෂාව",  items: [
+    { key: "security",   label: "ආරක්ෂාව හා සටහන්",   icon: "shield" }
   ]}
 ];
 const TITLES = {
@@ -425,7 +471,10 @@ const TITLES = {
   gallery:    ["ඡායාරූප එකතුව", "Moments of Love · ඡායාරූප 9ක්"],
   blessings:  ["සුබ පැතුම් අනුමැතිය", "අනුමත කළ පසු පොදු අඩවියේ දිස් වේ"],
   visibility: ["කොටස් පෙන්වීම", "පොදු අඩවියේ කොටස් ක්ෂණිකව පාලනය"],
-  theme:      ["වර්ණ සැකසුම්", "පොදු අඩවියේ වර්ණ තේමාව"]
+  theme:      ["වර්ණ සැකසුම්", "පොදු අඩවියේ වර්ණ තේමාව"],
+  analytics:  ["පැමිණීම් විශ්ලේෂණය", "QR · වෙබ් · සෘජු පැමිණීම් සජීවීව"],
+  qr:         ["QR කේත මධ්‍යස්ථානය", "ආරාධනා QR කේත සාදා බාගන්න"],
+  security:   ["ආරක්ෂාව හා සටහන්", "පිවිසුම් තත්ත්වය සහ පරිපාලන ක්‍රියා සටහන"]
 };
 const svg = (k) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (ICONS[k] || ICONS.grid) + '"/></svg>';
 
@@ -1289,3 +1338,262 @@ $("#scrim").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 window.addEventListener("online",  () => syncState(true));
 window.addEventListener("offline", () => syncState(false));
+
+/* ════════════════════════════════════════════════════════════════════════════
+   v2 · SECURE UPLOADS — signed first, unsigned fallback
+   When the admin is served from Vercel, /api/sign-upload signs the request with
+   CLOUDINARY_API_SECRET **on the server**; the secret never reaches the browser
+   and the public unsigned preset can then be switched off in Cloudinary. On a
+   host without functions (GitHub Pages) it degrades to the unsigned preset.
+   ════════════════════════════════════════════════════════════════════════════ */
+async function getSignature(paramsToSign) {
+  try {
+    const u = auth.currentUser; if (!u) return null;
+    const token = await u.getIdToken();          // proves who is asking
+    const r = await fetch(SIGN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(paramsToSign)
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return (j && j.signature && j.apiKey && j.cloudName) ? j : null;
+  } catch (_) { return null; }
+}
+uploadImage = function (file, onProgress) {
+  return new Promise(async (resolve, reject) => {
+    const blob = await downscale(file);
+    const ts = Math.round(Date.now() / 1000);
+    const sig = await getSignature({ timestamp: ts, folder: "helasiritha" });
+    signMode = sig ? "signed" : "unsigned";
+    const fd = new FormData();
+    fd.append("file", blob);
+    if (sig) {
+      fd.append("api_key", sig.apiKey); fd.append("timestamp", String(ts));
+      fd.append("folder", "helasiritha"); fd.append("signature", sig.signature);
+    } else {
+      fd.append("upload_preset", CLOUD.preset);
+    }
+    const cloudName = (sig && sig.cloudName) || CLOUD.name;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "https://api.cloudinary.com/v1_1/" + cloudName + "/image/upload");
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
+    xhr.onload = () => {
+      try {
+        const j = JSON.parse(xhr.responseText);
+        j.secure_url ? resolve(j) : reject(new Error((j.error && j.error.message) || "උඩුගත කිරීම අසාර්ථකයි"));
+      } catch (err) { reject(err); }
+    };
+    xhr.onerror = () => reject(new Error("ජාල දෝෂයකි"));
+    xhr.send(fd);
+  });
+};
+
+/* ════════════════════ v2 · VISIT ANALYTICS ════════════════════ */
+const dayKey = (d) => {
+  const z = new Date(d); const p = (n) => String(n).padStart(2, "0");
+  return z.getFullYear() + "-" + p(z.getMonth() + 1) + "-" + p(z.getDate());
+};
+function visitSecs(v) { return (v.ts && v.ts.seconds) ? v.ts.seconds : 0; }
+function visitDay(v) { return v.day || (visitSecs(v) ? dayKey(visitSecs(v) * 1000) : ""); }
+function visitKind(v) { const k = String(v.kind || "").toLowerCase(); return VISIT_KINDS.includes(k) ? k : "direct"; }
+function visitStats() {
+  const by = { qr: 0, web: 0, direct: 0 };
+  const today = dayKey(Date.now()); let todayN = 0;
+  const cut7 = Math.floor(Date.now() / 1000) - 7 * 86400; let last7 = 0;
+  visits.forEach(v => { by[visitKind(v)]++; if (visitDay(v) === today) todayN++; if (visitSecs(v) >= cut7) last7++; });
+  return { by, total: visits.length, today: todayN, last7 };
+}
+renderers.analytics = function () {
+  const S = visitStats();
+  const days = 14, series = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = dayKey(Date.now() - i * 86400000);
+    series.push({ d, qr: 0, web: 0, direct: 0, n: 0 });
+  }
+  const idx = {}; series.forEach((r, i) => idx[r.d] = i);
+  visits.forEach(v => { const i = idx[visitDay(v)]; if (i != null) { series[i][visitKind(v)]++; series[i].n++; } });
+  const peak = Math.max(1, ...series.map(r => r.n));
+  const ic = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
+  const tile = (v, l, sub, cls, icon) =>
+    '<div class="kpi-tile ' + (cls || "") + '"><div class="ic">' + ic(icon) + '</div>' +
+    '<div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div>' +
+    (sub ? '<div class="s">' + esc(sub) + '</div>' : '') + '</div>';
+  const recent = visits.slice(0, 25);
+  const kindLabel = { qr: "QR කේතය", web: "වෙබ් සබැඳිය", direct: "සෘජු" };
+
+  $("#p-analytics").innerHTML =
+    '<div class="kpi">' +
+      tile(S.total, "මුළු පැමිණීම්", "සියලු මූලාශ්‍ර", "", ICONS.eye) +
+      tile(S.by.qr, "QR කේතයෙන්", "ආරාධනා කාඩ්පත් / QR", "qr", ICONS.qr) +
+      tile(S.by.web, "වෙබ් සබැඳියෙන්", "WhatsApp, සමාජ මාධ්‍ය…", "web", ICONS.grid) +
+      tile(S.by.direct, "සෘජු පිවිසුම්", "කෙලින්ම ලිපිනය ටයිප් කර", "", ICONS.users) +
+      tile(S.today, "අද පැමිණීම්", dayKey(Date.now()), "", ICONS.chart) +
+      tile(S.last7, "දින 7ක", "පසුගිය සතිය", "", ICONS.chart) +
+    '</div>' +
+    card('<h3>දෛනික පැමිණීම් · පසුගිය දින 14</h3>' +
+      '<div class="chart">' + series.map(r => {
+        const h = (x) => Math.round(x / peak * 100);
+        return '<div class="col" title="' + esc(r.d) + ' · ' + r.n + '">' +
+          '<div class="stack">' +
+            (r.direct ? '<div class="seg direct" style="height:' + h(r.direct) + '%"></div>' : '') +
+            (r.web ? '<div class="seg web" style="height:' + h(r.web) + '%"></div>' : '') +
+            (r.qr ? '<div class="seg qr" style="height:' + h(r.qr) + '%"></div>' : '') +
+          '</div><div class="cl">' + esc(r.d.slice(5)) + '</div></div>';
+      }).join("") + '</div>' +
+      '<div class="legend"><span><i style="background:linear-gradient(180deg,#9CC9F5,#5E93CE)"></i>QR</span>' +
+      '<span><i style="background:linear-gradient(180deg,#9CEFC9,#43BE8B)"></i>වෙබ්</span>' +
+      '<span><i style="background:linear-gradient(105deg,#F7E9C4,#C9A35C)"></i>සෘජු</span></div>' +
+      (visitsCapped ? '<p class="slot-note warn">නවතම වාර්තා 5000 පමණක් පෙන්වයි.</p>' : '')) +
+    card('<div class="card-head"><h3>නවතම පැමිණීම්</h3>' +
+      '<button class="btn sm ghost" id="vCsv" type="button">CSV බාගන්න</button></div>' +
+      (recent.length
+        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>දිනය</th><th>මූලාශ්‍රය</th><th>භාෂාව</th><th>යොමුව</th></tr></thead><tbody>' +
+          recent.map(v => '<tr><td>' + esc(visitSecs(v) ? new Date(visitSecs(v) * 1000).toLocaleString("si-LK") : visitDay(v)) + '</td>' +
+            '<td><span class="pill side">' + esc(kindLabel[visitKind(v)]) + '</span></td>' +
+            '<td>' + esc(v.lang || "—") + '</td><td>' + esc((v.ref || "—").slice(0, 46)) + '</td></tr>').join("") +
+          '</tbody></table></div>'
+        : '<div class="empty">තවම පැමිණීම් වාර්තා නැත. පොදු අඩවියේ නව <code>app.js</code> deploy කළ පසු මෙය පිරෙනු ඇත.</div>'));
+
+  if ($("#vCsv")) $("#vCsv").onclick = () => downloadCsv(
+    [["දිනය", "මූලාශ්‍රය", "භාෂාව", "යොමුව"]].concat(visits.map(v =>
+      [visitSecs(v) ? new Date(visitSecs(v) * 1000).toLocaleString("si-LK") : visitDay(v), kindLabel[visitKind(v)], v.lang || "", v.ref || ""])),
+    "helasiritha-visits.csv");
+};
+
+/* ════════════════════ v2 · QR STUDIO ════════════════════ */
+let qrP = null;
+function loadQR() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (qrP) return qrP;
+  qrP = new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = QR_CDN; s.async = true;
+    s.onload = () => window.qrcode ? res(window.qrcode) : rej(new Error("qr load"));
+    s.onerror = () => rej(new Error("qr load"));
+    document.head.appendChild(s);
+  });
+  return qrP;
+}
+renderers.qr = function () {
+  const S = visitStats();
+  $("#p-qr").innerHTML =
+    card('<h3>ආරාධනා QR කේතය</h3>' +
+      '<p class="hint">මෙම QR කේතය හරහා පැමිණෙන අය <b>“QR කේතයෙන්”</b> ලෙස වෙන් වෙන්ව ගණන් ගැනේ</p>' +
+      '<div class="grid2">' +
+        fld("ඉලක්ක ලිපිනය", "qr_url", PUBLIC_SITE) +
+        fld("මූලාශ්‍ර ලේබලය (src)", "qr_src", "qr") +
+      '</div>' +
+      '<div class="row" style="margin-bottom:16px">' +
+        '<button class="btn primary sm" id="qrMake" type="button">QR කේතය සාදන්න</button>' +
+        '<button class="btn sm ghost" id="qrPng" type="button" disabled>PNG බාගන්න</button>' +
+        '<button class="btn sm ghost" id="qrCopy" type="button">සබැඳිය copy</button>' +
+      '</div>' +
+      '<div class="qr-wrap"><div class="qr-box" id="qrBox"><div class="empty" style="width:210px">QR කේතය මෙහි දිස් වේ</div></div>' +
+      '<div class="qr-meta"><label style="font-size:.8rem;font-weight:700;color:var(--mut)">සම්පූර්ණ සබැඳිය</label>' +
+      '<code id="qrLink">' + esc(PUBLIC_SITE + "/?src=qr") + '</code>' +
+      '<p class="hint" style="padding:0;margin-top:12px">මුද්‍රිත ආරාධනා පත්‍රවල මෙය භාවිතා කරන්න. ' +
+      'WhatsApp වැනි තැන්වලට <code>?src=web</code> යොදන්න — එවිට ඒවා වෙන් වෙන්ව ගණන් ගැනේ.</p>' +
+      '<div class="stats" style="margin-top:14px">' + stat(S.by.qr, "QR ස්කෑන්", "gold") + stat(S.by.web, "වෙබ්", "ok") + '</div>' +
+      '</div></div>');
+
+  const link = () => {
+    const base = ($("#qr_url").value.trim() || PUBLIC_SITE).replace(/\/+$/, "");
+    const src = encodeURIComponent($("#qr_src").value.trim() || "qr");
+    return base + "/?src=" + src;
+  };
+  const paint = () => { $("#qrLink").textContent = link(); };
+  $("#qr_url").oninput = paint; $("#qr_src").oninput = paint;
+  $("#qrMake").onclick = async () => {
+    const b = $("#qrMake"); b.disabled = true; b.textContent = "සාදමින්…";
+    try {
+      const qrcode = await loadQR();
+      const q = qrcode(0, "M"); q.addData(link()); q.make();
+      $("#qrBox").innerHTML = q.createSvgTag({ cellSize: 6, margin: 4 });
+      $("#qrPng").disabled = false;
+      $("#qrPng").onclick = () => {
+        const a = document.createElement("a");
+        a.href = q.createDataURL(10, 4); a.download = "helasiritha-qr.png"; a.click();
+        toast("QR කේතය බාගත විය ✓", "ok");
+      };
+      toast("QR කේතය සාදන ලදී ✓", "ok");
+    } catch (e) { toast("QR සෑදීම අසාර්ථකයි — අන්තර්ජාලය පරීක්ෂා කරන්න", "err"); }
+    b.disabled = false; b.textContent = "QR කේතය සාදන්න";
+  };
+  $("#qrCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText(link()); toast("සබැඳිය copy විය ✓", "ok"); }
+    catch (_) { toast("copy කළ නොහැක — අතින් තෝරන්න", "warn"); }
+  };
+};
+
+/* ════════════════════ v2 · SECURITY & AUDIT ════════════════════ */
+let sessionStart = Date.now(), lastActivity = Date.now();
+renderers.security = function () {
+  const u = auth.currentUser;
+  const https = location.protocol === "https:" || location.hostname === "localhost";
+  const mins = Math.round((Date.now() - sessionStart) / 60000);
+  const row = (ok, label, detail) =>
+    '<div class="sec-note ' + (ok ? "ok" : "") + '">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="' +
+      (ok ? "M20 6L9 17l-5-5" : "M12 8v5M12 16h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z") +
+    '"/></svg><div><b>' + esc(label) + '</b><div>' + detail + '</div></div></div>';
+
+  $("#p-security").innerHTML =
+    card('<h3>වත්මන් සැසිය</h3>' +
+      row(true, "තනි පරිපාලක ගිණුම තහවුරුයි", esc((u && u.email) || "—") + " · Google OAuth") +
+      row(!!(u && u.emailVerified), "විද්‍යුත් තැපෑල තහවුරු කර ඇත", (u && u.emailVerified) ? "Firestore rules සඳහා අවශ්‍යයි" : "තහවුරු කර නැත") +
+      row(https, "සම්බන්ධතාවය සංකේතනය කර ඇත", https ? "HTTPS" : "HTTP — ආරක්ෂිත නොවේ") +
+      row(signMode !== "unsigned", "ඡායාරූප උඩුගත කිරීම", signMode === "signed" ? "Signed (server-side secret) ✓"
+        : signMode === "unsigned" ? "Unsigned preset — /api/sign-upload යෙදුවොත් වඩාත් ආරක්ෂිතයි" : "තවම උඩුගත කර නැත") +
+      '<div class="row" style="margin-top:6px">' +
+        '<span class="faint" style="font-size:.8rem">සැසිය මිනිත්තු ' + mins + 'ක් · අක්‍රීය මිනිත්තු 20කින් ස්වයංක්‍රීයව පිටවේ</span>' +
+        '<span class="sp" style="flex:1"></span>' +
+        '<button class="btn sm bad" id="secOut" type="button">දැන්ම පිටවෙන්න</button></div>') +
+
+    card('<h3>දත්ත උපස්ථය</h3><p class="hint">සම්පූර්ණ මංගල දත්ත JSON ගොනුවක් ලෙස බාගන්න — නිතර ගන්න</p>' +
+      '<div class="row"><button class="btn primary sm" id="secBackup" type="button">සම්පූර්ණ උපස්ථය බාගන්න</button>' +
+      '<span class="faint" style="font-size:.8rem">ආගන්තුකයෝ ' + guests.length + ' · පිළිතුරු ' + rsvps.length +
+      ' · ඡායාරූප ' + gallery.length + ' · පැතුම් ' + blessings.length + '</span></div>') +
+
+    card('<div class="card-head"><h3>පරිපාලන ක්‍රියා සටහන</h3>' +
+      '<span class="faint" style="font-size:.78rem">නවතම ' + audit.length + ' · වෙනස් කළ නොහැක</span></div>' +
+      '<p class="hint">සෑම වෙනසක්ම මෙහි ස්ථිරව සටහන් වේ. rules මගින් මකා දැමීම හෝ සංස්කරණය තහනම්.</p>' +
+      (audit.length
+        ? '<div class="list audit">' + audit.map(a =>
+            '<div class="item"><div class="meta"><div class="act">' + esc(a.action || "—") + '</div>' +
+            '<div class="tgt">' + esc(a.target || "") + '</div>' +
+            '<div class="who">' + esc(a.email || "") + ' · ' +
+            esc(a.ts && a.ts.seconds ? new Date(a.ts.seconds * 1000).toLocaleString("si-LK") : "") + '</div></div></div>').join("") + '</div>'
+        : '<div class="empty">තවම සටහන් නැත. (rules deploy කළ පසු ක්‍රියාත්මක වේ)</div>'));
+
+  $("#secOut").onclick = async () => { await signOut(auth).catch(() => {}); };
+  $("#secBackup").onclick = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(), by: (u && u.email) || "",
+      content, agenda, theme, gallery, guests, rsvps, blessings,
+      visitSummary: visitStats()
+    };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    a.download = "helasiritha-backup-" + dayKey(Date.now()) + ".json"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    logAudit("backup.download", dayKey(Date.now()));
+    toast("උපස්ථය බාගත විය ✓", "ok");
+  };
+};
+
+/* ════════════════════ v2 · IDLE AUTO-LOGOUT ════════════════════ */
+["pointerdown", "keydown", "scroll", "touchstart"].forEach(ev =>
+  window.addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true }));
+setInterval(() => {
+  if (!auth.currentUser) return;
+  if (Date.now() - lastActivity > IDLE_LOGOUT_MS) {
+    lastActivity = Date.now();
+    signOut(auth).catch(() => {});
+    toast("අක්‍රීයතාවය නිසා ස්වයංක්‍රීයව පිටවිය", "warn");
+  }
+}, 30000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && auth.currentUser && !isAdminEmail(auth.currentUser.email)) {
+    rejectIntruder("auth/not-admin");
+  }
+});
