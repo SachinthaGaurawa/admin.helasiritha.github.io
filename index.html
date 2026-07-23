@@ -1,568 +1,131 @@
 <!doctype html>
 <html lang="si">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#1b1813" />
-  <meta name="robots" content="noindex, nofollow" />
-  <title>හෙළ සිරිත · පරිපාලන පුවරුව</title>
-  <link rel="icon" type="image/png" href="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <style>
-/* ════════════════════════════════════════════════════════════════════════
- *  හෙළ සිරිත · ADMIN STYLES  ·  assets/css/admin.css
- *  Modern, clean, functional control panel. Light content + brass-accented
- *  dark sidebar. Fully responsive (sidebar → drawer on phones/tablets).
- * ════════════════════════════════════════════════════════════════════════ */
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07070a">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="dark">
+<title>හෙළ සිරිත · පරිපාලන මූලස්ථානය</title>
+<link rel="icon" type="image/png" href="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png">
 
-:root {
-  --gold:#C9A574; --gold-d:#A48354; --ink:#1d1a14; --bg:#f4f1ea; --panel:#ffffff;
-  --line:#e7e1d3; --muted:#7d766a; --sidebar:#1b1813; --sidebar-2:#241f17;
-  --ok:#2f8f5b; --warn:#c08a1e; --bad:#c0473b;
-  --r:14px; --shadow:0 12px 34px -22px rgba(40,30,10,.5);
-  --font:"Noto Sans Sinhala","Segoe UI",system-ui,-apple-system,sans-serif;
-}
-* { box-sizing:border-box; }
-html,body { margin:0; height:100%; }
-body { font-family:var(--font); background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%; }
-img { max-width:100%; display:block; }
-a { color:inherit; text-decoration:none; }
-button,input,select,textarea { font-family:inherit; }
-code { background:#eee7d6; padding:1px 6px; border-radius:6px; font-size:.86em; }
+<!-- Unicode-safe typography: Sinhala + Tamil + Latin display, with local fallbacks -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700;800&family=Noto+Serif+Sinhala:wght@600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-/* ───────────── buttons / inputs (shared) ───────────── */
-.btn { display:inline-flex; align-items:center; justify-content:center; gap:.5em; border:1px solid var(--line);
-  background:#fff; color:var(--ink); padding:.7em 1.15em; border-radius:10px; font-weight:600; cursor:pointer; transition:.2s; }
-.btn:hover { transform:translateY(-1px); box-shadow:var(--shadow); }
-.btn.primary { background:linear-gradient(135deg,#E7CE97,#C9A574 60%,#A48354); color:#241a05; border-color:transparent; }
-.btn.ghost { background:transparent; }
-.btn.danger { color:#fff; background:var(--bad); border-color:transparent; }
-.btn.ok { color:#fff; background:var(--ok); border-color:transparent; }
-.btn.sm { padding:.45em .8em; font-size:.85rem; }
-.btn.xs { padding:.32em .6em; font-size:.78rem; border-radius:8px; }
-.btn:disabled { opacity:.6; cursor:default; transform:none; }
-.input { width:100%; padding:.7em .85em; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); font-size:.95rem; }
-.input:focus { outline:2px solid color-mix(in srgb,var(--gold) 70%, transparent); border-color:var(--gold); }
-.field { display:grid; gap:6px; margin-bottom:14px; }
-.field label { font-weight:600; font-size:.9rem; }
-.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
-.row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-.muted { color:var(--muted); font-size:.9rem; }
-
-.switch { display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none; margin:6px 0; }
-.switch input { display:none; }
-.switch span { width:42px; height:24px; border-radius:999px; background:#d8d1c2; position:relative; transition:.2s; flex:0 0 auto; }
-.switch span::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:.2s; }
-.switch input:checked + span { background:var(--gold); }
-.switch input:checked + span::after { transform:translateX(18px); }
-.switch.big { display:flex; justify-content:flex-start; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
-
-/* ───────────── LOGIN ───────────── */
-#login { min-height:100svh; display:grid; place-items:center; padding:24px;
-  background:radial-gradient(900px 500px at 50% -10%, color-mix(in srgb,var(--gold) 26%, transparent), transparent 60%), var(--sidebar); }
-.login-card { width:100%; max-width:400px; background:var(--panel); border-radius:18px; padding:34px 28px; box-shadow:0 30px 80px -30px #000; }
-.login-card .logo { width:64px; height:64px; margin:0 auto 12px; border-radius:50%; display:grid; place-items:center;
-  background:linear-gradient(135deg,#E7CE97,#A48354); color:#241a05; font-weight:800; font-size:1.4rem; }
-.login-card h1 { text-align:center; margin:.2em 0; font-size:1.4rem; }
-.login-card .sub { text-align:center; color:var(--muted); margin:0 0 18px; font-size:.92rem; }
-.g-btn { width:100%; gap:10px; }
-.g-btn svg { width:20px; height:20px; }
-.divider-or { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:.82rem; margin:16px 0; }
-.divider-or::before, .divider-or::after { content:""; flex:1; height:1px; background:var(--line); }
-.login-err { color:var(--bad); font-size:.88rem; min-height:1.2em; text-align:center; margin-top:10px; }
-.login-foot { text-align:center; margin-top:14px; font-size:.82rem; color:var(--muted); }
-.link-btn { background:none; border:none; color:var(--gold-d); cursor:pointer; font-size:.85rem; padding:0; }
-
-/* ───────────── APP SHELL ───────────── */
-#app { display:grid; grid-template-columns:264px 1fr; min-height:100svh; }
-/* the [hidden] attribute must win over the #login/#app display rules above,
-   otherwise the signed-out app renders below the login card (ID beats [hidden]). */
-#login[hidden], #app[hidden] { display:none !important; }
-#sidebar { background:var(--sidebar); color:#e9e2d2; display:flex; flex-direction:column; position:sticky; top:0; height:100svh; overflow:auto; }
-.side-brand { padding:20px 18px; font-weight:800; font-size:1.15rem; letter-spacing:.04em; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--sidebar-2); }
-.side-brand .dot { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#E7CE97,#A48354); flex:0 0 auto; }
-#nav { padding:10px 10px 20px; flex:1; }
-.nav-group { margin-top:14px; }
-.nav-group-label { font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:#8c8473; padding:6px 10px; }
-.nav-item { width:100%; display:flex; align-items:center; gap:10px; padding:.7em .8em; border:none; background:none; color:#d8d1bf; border-radius:10px; cursor:pointer; text-align:start; font-size:.92rem; }
-.nav-item svg { width:18px; height:18px; opacity:.8; flex:0 0 auto; }
-.nav-item:hover { background:var(--sidebar-2); color:#fff; }
-.nav-item.active { background:linear-gradient(135deg,#E7CE97,#A48354); color:#241a05; font-weight:700; }
-.nav-item.active svg { opacity:1; }
-.side-foot { padding:14px; border-top:1px solid var(--sidebar-2); }
-.whoami { font-size:.78rem; color:#9b9485; margin-bottom:8px; word-break:break-all; }
-
-#content { display:flex; flex-direction:column; min-width:0; }
-.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px; padding:14px 22px;
-  background:color-mix(in srgb,var(--bg) 92%, #fff); border-bottom:1px solid var(--line); backdrop-filter:blur(6px); }
-.topbar .crumb { font-weight:700; font-size:1.05rem; }
-.topbar .spacer { flex:1; }
-#menuBtn { display:none; }
-#main { padding:22px; overflow:auto; }
-
-/* ───────────── module head + panels ───────────── */
-.mod-head { margin-bottom:16px; }
-.mod-head h1 { margin:0; font-size:1.5rem; }
-.mod-head p { margin:4px 0 0; color:var(--muted); }
-.panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; margin-bottom:18px; box-shadow:var(--shadow); }
-.panel h3 { margin:0 0 12px; font-size:1.1rem; }
-.panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-.sm-input { max-width:240px; }
-
-/* stats */
-.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:14px; }
-.stat { padding:16px; border-radius:12px; background:#faf7f0; border:1px solid var(--line); text-align:center; }
-.stat .n { font-size:2rem; font-weight:800; line-height:1; }
-.stat .l { color:var(--muted); font-size:.85rem; margin-top:6px; }
-.stat.ok .n { color:var(--ok); } .stat.warn .n { color:var(--warn); } .stat.bad .n { color:var(--bad); }
-.split { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-.split-name { font-weight:800; margin-bottom:8px; }
-.split-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); }
-.big-total { font-weight:800; color:var(--gold-d); }
-
-/* tables */
-.tbl-scroll { overflow:auto; }
-.tbl { width:100%; border-collapse:collapse; font-size:.92rem; }
-.tbl th, .tbl td { text-align:start; padding:.6em .7em; border-bottom:1px solid var(--line); white-space:nowrap; }
-.tbl th { color:var(--muted); font-weight:700; font-size:.82rem; }
-.mini { padding:.35em .5em; border:1px solid var(--line); border-radius:8px; background:#fff; }
-.chip { padding:2px 10px; border-radius:999px; font-size:.78rem; font-weight:700; }
-.chip.ok { background:#e3f3ea; color:var(--ok); } .chip.warn { background:#f7eed6; color:var(--warn); } .chip.bad { background:#f7e0dd; color:var(--bad); }
-
-/* lines (agenda/blessings/budget) */
-.line { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line); }
-.line:last-child { border-bottom:0; }
-.line-actions { display:flex; gap:6px; flex:0 0 auto; }
-
-/* color rows */
-.color-row { display:flex; gap:8px; align-items:center; }
-.color-row input[type=color] { width:46px; height:40px; border:1px solid var(--line); border-radius:8px; background:#fff; padding:2px; }
-.preset-row { display:flex; gap:8px; flex-wrap:wrap; }
-
-/* gallery */
-.gal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; }
-.gal-cell { position:relative; border-radius:10px; overflow:hidden; border:1px solid var(--line); }
-.gal-cell img { width:100%; aspect-ratio:1; object-fit:cover; }
-.gal-cell .del { position:absolute; top:6px; right:6px; }
-.progress { height:8px; background:#eee; border-radius:999px; overflow:hidden; margin:10px 0; }
-.progress .bar { height:100%; width:0; background:linear-gradient(90deg,#E7CE97,#A48354); transition:width .2s; }
-
-/* qr */
-.qr-stage { display:grid; place-items:center; padding:14px; }
-.qr-stage img { border:1px solid var(--line); border-radius:12px; background:#fff; }
-
-/* toast */
-#toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
-  background:#241f17; color:#fff; padding:12px 20px; border-radius:999px; font-size:.92rem; z-index:200; transition:.3s; box-shadow:0 16px 40px -16px #000; }
-#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-#toast.bad { background:var(--bad); } #toast.warn { background:var(--warn); }
-
-#scrim { display:none; }
-
-/* ───────────── responsive ───────────── */
-@media (max-width:900px) {
-  #app { grid-template-columns:1fr; }
-  #sidebar { position:fixed; z-index:50; width:280px; left:0; top:0; transform:translateX(-100%); transition:transform .3s; }
-  #sidebar.open { transform:none; box-shadow:0 0 60px rgba(0,0,0,.5); }
-  #menuBtn { display:inline-flex; }
-  #scrim { display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; opacity:0; pointer-events:none; transition:.3s; }
-  #sidebar.open ~ #content #scrim, body:has(#sidebar.open) #scrim { opacity:1; pointer-events:auto; }
-  .grid2 { grid-template-columns:1fr; }
-  .split { grid-template-columns:1fr; }
-}
-@media (max-width:520px) { #main { padding:14px; } .topbar { padding:12px 14px; } .login-card { padding:26px 20px; } }
-
-/* ───────────── login logo (image) + brand mark ───────────── */
-.login-card .logo {
-  width:78px; height:78px; padding:0; overflow:hidden;
-  background:linear-gradient(135deg,#E7CE97,#A48354);
-  box-shadow:0 10px 26px -12px rgba(164,131,84,.8), 0 0 0 4px color-mix(in srgb,var(--gold) 26%, transparent);
-}
-.login-card .logo img { width:100%; height:100%; object-fit:cover; }
-.brand-ic { width:32px; height:32px; border-radius:50%; flex:0 0 auto; object-fit:cover; box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 32%, transparent); }
-
-/* ───────────── confirm / alert modal ───────────── */
-.modal { position:fixed; inset:0; z-index:300; display:none; place-items:center; padding:20px;
-  background:rgba(20,16,8,.55); backdrop-filter:blur(3px); }
-.modal.show { display:grid; animation:mfade .18s ease; }
-@keyframes mfade { from { opacity:0 } to { opacity:1 } }
-.modal-card { width:100%; max-width:380px; background:var(--panel); border-radius:18px; padding:26px 24px; text-align:center;
-  box-shadow:0 30px 80px -28px #000; animation:mpop .2s cubic-bezier(.2,.8,.2,1); }
-@keyframes mpop { from { transform:translateY(10px) scale(.97); opacity:.6 } to { transform:none; opacity:1 } }
-.modal-ic { width:54px; height:54px; margin:0 auto 12px; border-radius:50%; display:grid; place-items:center; font-size:1.5rem; }
-.modal-ic.danger { background:#f7e0dd; color:var(--bad); }
-.modal-ic.ask { background:#f3ecd9; color:var(--gold-d); }
-.modal-title { margin:.2em 0; font-size:1.2rem; }
-.modal-msg { color:var(--muted); margin:0 0 18px; }
-.modal-actions { display:flex; gap:10px; }
-.modal-actions .btn { flex:1; justify-content:center; }
-
-/* ───────────── visual polish (modern, non-traditional) ───────────── */
-.stat { position:relative; overflow:hidden; background:linear-gradient(180deg,#fff,#faf6ee); }
-.stat::before { content:""; position:absolute; left:0; right:0; top:0; height:3px; background:linear-gradient(90deg,#E7CE97,#A48354); opacity:.75; }
-.panel { background:linear-gradient(180deg,#fff,#fffdf8); }
-.panel h3 { position:relative; padding-left:12px; }
-.panel h3::before { content:""; position:absolute; left:0; top:.15em; bottom:.15em; width:3px; border-radius:2px; background:linear-gradient(180deg,#E7CE97,#A48354); }
-.nav-item.active { box-shadow:0 8px 20px -12px rgba(201,165,116,.95); }
-.topbar { box-shadow:0 1px 0 color-mix(in srgb,var(--gold) 28%, transparent); }
-.topbar .crumb { color:#3a3326; }
-.tbl tbody tr:hover { background:#faf7f0; }
-.mini:focus { outline:2px solid color-mix(in srgb,var(--gold) 65%, transparent); border-color:var(--gold); }
-
-/* ───────────────────────── THEME + VISIBILITY modules ─────────────────── */
-.thm-list,.vis-list { display:flex; flex-direction:column; }
-.thm-row,.vis-row { display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:14px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-.thm-row:last-child,.vis-row:last-child { border-bottom:0; }
-.thm-meta,.vis-meta { min-width:0; flex:1 1 200px; }
-.thm-label,.vis-label { font-weight:600; line-height:1.4; }
-.thm-hint,.vis-hint { font-size:.82rem; line-height:1.5; margin-top:2px; }
-.thm-pick { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
-.thm-color { width:46px; height:38px; padding:0; border:1px solid var(--line); border-radius:10px;
-  background:#fff; cursor:pointer; flex:0 0 auto; }
-.thm-color::-webkit-color-swatch-wrapper { padding:3px; }
-.thm-color::-webkit-color-swatch { border:none; border-radius:7px; }
-.thm-hex { width:104px; text-transform:uppercase; letter-spacing:.04em; font-family:ui-monospace,Menlo,Consolas,monospace; }
-.thm-preview { margin-top:18px; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
-.thm-prev-card { padding:30px 22px; text-align:center;
-  background:var(--p-surface,#FFFBF2); color:var(--p-text,#221C01);
-  background-image:radial-gradient(circle at 50% 0,color-mix(in srgb,var(--p-secondary,#F2E5C6) 70%,transparent),transparent 70%); }
-.thm-prev-ay { font-size:.78rem; letter-spacing:.34em; text-transform:uppercase; color:var(--p-accent,#A48354); }
-.thm-prev-names { font-size:1.9rem; font-weight:700; margin:8px 0 6px; color:var(--p-primary,#C9A574);
-  text-shadow:0 1px 0 color-mix(in srgb,var(--p-accent,#A48354) 40%,transparent); }
-.thm-prev-line { font-size:.95rem; opacity:.85; }
-.thm-actions { display:flex; justify-content:flex-end; margin-top:16px; }
-@media (max-width:520px){
-  .thm-pick { width:100%; justify-content:space-between; }
-  .thm-actions .btn { flex:1; }
-}
-
-</style>
+<!-- Tailwind CDN (no build step — static GitHub Pages / Vercel friendly) -->
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          noir:   { 900:'#07070a', 800:'#0b0b10', 700:'#101017', 600:'#15151e' },
+          champ:  { 50:'#F6E7BE', 100:'#E8C987', 200:'#D4AF6A', 300:'#B08D4F', 400:'#8A6F3E' },
+          ivory:  { 100:'#EDE7DB', 200:'#A9A192', 300:'#7C7568' }
+        },
+        fontFamily: {
+          disp: ['Playfair Display','Noto Serif Sinhala','serif'],
+          body: ['Noto Sans Sinhala','Inter','system-ui','sans-serif']
+        }
+      }
+    }
+  };
+</script>
+<!-- Loaded AFTER Tailwind so the bespoke luxury layer always wins -->
+<link rel="stylesheet" href="admin.css">
 </head>
 <body>
 
-  <!-- ░░ LOGIN ░░ -->
-  <section id="login">
-    <div class="login-card">
-      <div class="logo"><img src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="හෙළ සිරිත" /></div>
-      <h1>හෙළ සිරිත · පරිපාලනය</h1>
-      <p class="sub">පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.</p>
-
-      <button id="googleBtn" class="btn g-btn">
-        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.5l-6.5-5.5C29.7 34.6 27 35.5 24 35.5c-5.2 0-9.6-3.3-11.2-7.9l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.5 5.5C40.9 36 44 30.6 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
-        Google ගිණුමෙන් පිවිසෙන්න
-      </button>
-
-      <div class="divider-or">නැතහොත්</div>
-
-      <form id="loginForm">
-        <div class="field"><label for="email">ඊමේල්</label><input class="input" id="email" type="email" autocomplete="username" placeholder="gaurawasachintha@gmail.com" /></div>
-        <div class="field"><label for="password">මුරපදය</label><input class="input" id="password" type="password" autocomplete="current-password" /></div>
-        <button id="loginSubmit" class="btn primary" style="width:100%" type="submit">පිවිසෙන්න</button>
-      </form>
-
-      <p class="login-err" id="loginErr"></p>
-      <p class="login-foot"><button class="link-btn" id="forgotBtn" type="button">මුරපදය අමතකද?</button></p>
+<!-- ══════════════════════ LOGIN GATE (Google OAuth only) ══════════════════════ -->
+<section id="login" aria-label="පරිපාලක පිවිසුම">
+  <div class="login-card">
+    <div class="login-crest">
+      <img src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="හෙළ සිරිත" width="88" height="88">
     </div>
-  </section>
+    <p class="eyebrow">Helasiritha · Command Centre</p>
+    <h1 class="foil disp">පරිපාලන මූලස්ථානය</h1>
+    <p class="sub">මංගල පද්ධතියේ සම්පූර්ණ පාලනය</p>
 
-  <!-- ░░ APP ░░ -->
-  <div id="app" hidden>
-    <aside id="sidebar">
-      <div class="side-brand"><img class="brand-ic" src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="" /> හෙළ සිරිත</div>
-      <nav id="nav"></nav>
-      <div class="side-foot">
-        <div class="whoami" id="whoami"></div>
-        <button id="logoutBtn" class="btn" style="width:100%">පිටවීම (Logout)</button>
-      </div>
-    </aside>
+    <button id="googleBtn" class="gsi" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.5l-6.5-5.5C29.7 34.6 27 35.5 24 35.5c-5.2 0-9.6-3.3-11.2-7.9l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.5 5.5C40.9 36 44 30.6 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+      Google ගිණුමෙන් පිවිසෙන්න
+    </button>
 
-    <div id="content">
-      <header class="topbar">
-        <button id="menuBtn" class="btn ghost" aria-label="මෙනුව">☰</button>
-        <span class="crumb" id="crumb">දළ විශ්ලේෂණය</span>
-        <span class="spacer"></span>
-        <a class="btn ghost sm" href="https://helasiritha.vercel.app" target="_blank" rel="noopener">පොදු අඩවිය ↗</a>
-      </header>
-      <main id="main"></main>
-    </div>
+    <p class="login-err" id="loginErr" role="alert" aria-live="assertive"></p>
+
+    <p class="lock-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      තනි අනුමත ගිණුමකට පමණයි · අන් සියලු ගිණුම් ප්‍රතික්ෂේප වේ
+    </p>
   </div>
+</section>
 
-  <div id="scrim"></div>
+<!-- ══════════════════════════════ APP SHELL ══════════════════════════════ -->
+<div id="app" hidden>
 
-  <noscript><div style="padding:40px;text-align:center">මෙම පුවරුව භාවිතයට JavaScript අවශ්‍යයි.</div></noscript>
-
-  <script type="module">
-var at="12.14.0",U=`https://www.gstatic.com/firebasejs/${at}`,pe={apiKey:"AIzaSyCC18zyof_ORDkKwxAMJK4G3Atu2AkWodM",authDomain:"helasiritha-official.firebaseapp.com",projectId:"helasiritha-official",storageBucket:"helasiritha-official.firebasestorage.app",messagingSenderId:"993883662089",appId:"1:993883662089:web:b583123218df07be9155d8",measurementId:"G-PBJWLXWVD9"},R="gaurawasachintha@gmail.com",Y={cloudName:"dzrfpc9be",uploadPreset:"helasiritha_unsigned"};var{initializeApp:it}=await import(`${U}/firebase-app.js`),k=await import(`${U}/firebase-auth.js`),Q=await import(`${U}/firebase-firestore.js`),me=it(pe),A=k.getAuth(me),m=Q.getFirestore(me);try{await k.setPersistence(A,k.browserLocalPersistence)}catch{}var nt=typeof navigator<"u"&&/Android|iPhone|iPad|iPod|Mobile|Silk|KAIOS/i.test(navigator.userAgent||"")||typeof window<"u"&&window.matchMedia&&window.matchMedia("(pointer:coarse)").matches;function st(){let e=new k.GoogleAuthProvider;return e.setCustomParameters({login_hint:R,prompt:"select_account"}),e}var j=null,he=k.getRedirectResult(A).then(e=>(e&&e.user&&!z(e.user.email)&&k.signOut(A).catch(()=>{}),e)).catch(e=>(j=e,null));function z(e){return!!e&&e.trim().toLowerCase()===R.toLowerCase()}function ge(e,t){k.onAuthStateChanged(A,async i=>{if(!i){t(null);return}if(!z(i.email)){await k.signOut(A).catch(()=>{}),t("forbidden");return}e(i)})}async function ve(e,t){if(!z(e)){let i=new Error("forbidden");throw i.code="auth/not-admin",i}return k.signInWithEmailAndPassword(A,e.trim(),t)}async function be(){let e=st();if(nt)return await k.signInWithRedirect(A,e),null;try{let t=await k.signInWithPopup(A,e);if(!z(t.user?.email)){await k.signOut(A).catch(()=>{});let i=new Error("forbidden");throw i.code="auth/not-admin",i}return t}catch(t){if(["auth/popup-blocked","auth/popup-closed-by-user","auth/cancelled-popup-request","auth/operation-not-supported-in-this-environment"].includes(t.code))return await k.signInWithRedirect(A,e),null;throw t}}async function fe(e){if(!z(e)){let t=new Error("forbidden");throw t.code="auth/not-admin",t}return k.sendPasswordResetEmail(A,e.trim())}async function we(){return k.signOut(A)}function q(e){return{"auth/not-admin":"මෙම පද්ධතියට පිවිසීමට අවසර ඇත්තේ පරිපාලක ගිණුමට පමණි.","auth/invalid-credential":"ඊමේල් හෝ මුරපදය වැරදියි.","auth/invalid-email":"ඊමේල් ලිපිනය වලංගු නැත.","auth/user-not-found":"එවැනි ගිණුමක් හමු නොවීය.","auth/wrong-password":"මුරපදය වැරදියි.","auth/popup-closed-by-user":"පිවිසුම් කවුළුව වසා දමා ඇත.","auth/popup-blocked":"පිවිසුම් කවුළුව බ්‍රවුසරය විසින් අවහිර කර ඇත.","auth/too-many-requests":"උත්සාහයන් වැඩියි. මඳක් පසුව නැවත උත්සාහ කරන්න.","auth/network-request-failed":"අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.","auth/unauthorized-domain":"මෙම වසම Firebase Auth හි අවසර ලත් වසම් අතර නැත."}[e]||"පිවිසීමේ දෝෂයක්. නැවත උත්සාහ කරන්න."}var{collection:M,doc:y,onSnapshot:T,query:ye,orderBy:$e,getDocs:Ht,setDoc:O,addDoc:H,updateDoc:G,deleteDoc:D,writeBatch:lt,serverTimestamp:Ft}=Q,J=new Set,w={ready:!1,guests:[],rsvps:[],rsvpMap:{},blessings:[],agenda:[],gallery:[],budget:[],billing:[],site:{},theme:{},visibility:{},stats:{}};function Se(e){return J.add(e),()=>J.delete(e)}function L(){J.forEach(e=>e(w))}function F(){return w.guests.map(e=>{let t=w.rsvpMap[e.id];return{...e,status:t?.status||e.status||"pending",takingLiquor:t?!!t.takingLiquor:!!e.takingLiquor,partySize:t?.partySize||1,count:Math.max(1,Number(e.count)||1),dietary:t?.dietary||e.dietary||"",respondedAt:t?.respondedAt||e.respondedAt||null}})}function Z(...e){let t=e.join(" ").toLowerCase().normalize("NFC").replace(/[\u200b-\u200d\uFEFF]/g,"").replace(/\s+/g," ").trim(),i=t.replace(/\s/g,"");return Array.from(new Set([t,i,...t.split(" ")])).filter(Boolean)}function ke(){T(y(m,"config","site"),e=>{w.site=e.exists()?e.data():{},L()}),T(y(m,"config","theme"),e=>{w.theme=e.exists()?e.data():{},L()}),T(y(m,"config","visibility"),e=>{w.visibility=e.exists()?e.data():{},L()}),T(y(m,"config","stats"),e=>{w.stats=e.exists()?e.data():{},L()}),T(M(m,"guests"),e=>{w.guests=e.docs.map(t=>({id:t.id,...t.data()})),w.ready=!0,L(),_e()}),T(M(m,"rsvps"),e=>{w.rsvps=e.docs.map(t=>({id:t.id,...t.data()})),w.rsvpMap=Object.fromEntries(w.rsvps.map(t=>[t.guestId||t.id,t])),L(),_e()}),T(ye(M(m,"agenda"),$e("order","asc")),e=>{w.agenda=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(ye(M(m,"gallery"),$e("order","asc")),e=>{w.gallery=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(M(m,"blessings"),e=>{w.blessings=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(M(m,"budget"),e=>{w.budget=e.docs.map(t=>({id:t.id,...t.data()})),L()}),T(M(m,"billing"),e=>{w.billing=e.docs.map(t=>({id:t.id,...t.data()})),L()})}var xe=null;function _e(){clearTimeout(xe),xe=setTimeout(ee,1200)}async function ee(){let e=F(),t=s=>s.reduce((a,n)=>a+Math.max(1,Number(n.count)||1),0),i=e.filter(s=>s.status==="confirmed"),l={totalGuests:e.length,confirmed:i.length,pending:e.filter(s=>s.status==="pending").length,declined:e.filter(s=>s.status==="declined").length,totalPeople:t(e),confirmedPeople:t(i),updatedAt:Date.now()},o=w.stats||{};if(!(o.totalGuests===l.totalGuests&&o.confirmed===l.confirmed&&o.pending===l.pending&&o.declined===l.declined&&o.totalPeople===l.totalPeople&&o.confirmedPeople===l.confirmedPeople))try{await O(y(m,"config","stats"),l,{merge:!0})}catch{}}var Ee=e=>O(y(m,"config","site"),{...e,updatedAt:Date.now()},{merge:!0}),Me=e=>O(y(m,"config","theme"),{...e,updatedAt:Date.now()},{merge:!0}),Ce=e=>O(y(m,"config","visibility"),{...e,updatedAt:Date.now()},{merge:!0});async function Ae({name:e,familyName:t,side:i,count:l}){let o={name:e.trim(),familyName:(t||"").trim(),side:i==="bride"?"bride":"groom",count:Math.max(1,Number(l)||1),searchTokens:Z(e,t),status:"pending",takingLiquor:!1,tableNumber:null,plusOnes:0,dietary:"",respondedAt:null,createdAt:Date.now()};return H(M(m,"guests"),o)}async function Te(e){let t=[];for(let l=0;l<e.length;l+=400)t.push(e.slice(l,l+400));let i=0;for(let l of t){let o=lt(m);l.forEach(s=>{let a=y(M(m,"guests"));o.set(a,{name:s.name.trim(),familyName:(s.familyName||"").trim(),side:s.side==="bride"?"bride":"groom",count:Math.max(1,Number(s.count)||1),searchTokens:Z(s.name,s.familyName),status:"pending",takingLiquor:!1,tableNumber:null,plusOnes:0,dietary:"",respondedAt:null,createdAt:Date.now()}),i++}),await o.commit()}return i}async function te(e,t){if(t.name||t.familyName){let i=w.guests.find(l=>l.id===e)||{};t.searchTokens=Z(t.name??i.name,t.familyName??i.familyName)}return G(y(m,"guests",e),t)}var Le=e=>D(y(m,"guests",e));var Ne=(e,t)=>G(y(m,"guests",e),{count:Math.max(1,Number(t)||1)});async function Ie(e,t){let i=w.guests.find(l=>l.id===e)||{};return O(y(m,"rsvps",e),{guestId:e,guestName:i.name||"",side:i.side||"groom",...t,respondedAt:Date.now()},{merge:!0})}var qe=(e,t)=>Ie(e,{status:t}),Ge=(e,t)=>Ie(e,{takingLiquor:!!t}),De=e=>H(M(m,"agenda"),{...e,createdAt:Date.now()}),ae=(e,t)=>G(y(m,"agenda",e),t),Pe=e=>D(y(m,"agenda",e)),Be=e=>H(M(m,"gallery"),{...e,createdAt:Date.now()}),Re=e=>D(y(m,"gallery",e)),ze=e=>H(M(m,"budget"),{...e,createdAt:Date.now()}),ie=(e,t)=>G(y(m,"budget",e),t),Oe=e=>D(y(m,"budget",e)),He=e=>H(M(m,"billing"),{...e,createdAt:Date.now()}),X=(e,t)=>G(y(m,"billing",e),t),Fe=e=>D(y(m,"billing",e)),ne=(e,t)=>G(y(m,"blessings",e),{approved:!!t}),Ue=e=>D(y(m,"blessings",e));async function je(e,t){let i=`https://api.cloudinary.com/v1_1/${Y.cloudName}/image/upload`,l=new FormData;return l.append("file",e),l.append("upload_preset",Y.uploadPreset),new Promise((o,s)=>{let a=new XMLHttpRequest;a.open("POST",i),a.upload.onprogress=n=>{n.lengthComputable&&t&&t(Math.round(n.loaded/n.total*100))},a.onload=()=>{try{let n=JSON.parse(a.responseText);n.secure_url?o(n):s(new Error(n.error?.message||"upload failed"))}catch(n){s(n)}},a.onerror=()=>s(new Error("network error")),a.send(l)})}var C=w,d=(e,t=document)=>t.querySelector(e),f=(e,t=document)=>Array.from(t.querySelectorAll(e)),v=e=>String(e??"").replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[t]),oe=e=>"රු. "+(Number(e)||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2}),ot="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",V=null;function rt(){return window.XLSX?Promise.resolve(window.XLSX):V||(V=new Promise((e,t)=>{let i=document.createElement("script");i.src=ot,i.async=!0,i.onload=()=>window.XLSX?e(window.XLSX):t(new Error("xlsx-load")),i.onerror=()=>t(new Error("xlsx-load")),document.head.appendChild(i)}),V)}function se(e){if(!e||!e.length)return[];let t=0;e[0].map(s=>String(s??"").trim().toLowerCase()).some(s=>/නම|name|පවුල|family|ගණන|count|පාර්ශ|side/.test(s))&&(t=1);let o=[];for(let s=t;s<e.length;s++){let a=e[s]||[],n=String(a[0]??"").trim();n&&o.push({name:n,familyName:String(a[1]??"").trim(),count:Math.max(1,parseInt(a[2],10)||1)})}return o}function ct(e){return e.split(/\r?\n/).map(t=>t.trim()).filter(Boolean).map(t=>t.split(/[,\t]/).map(i=>i.trim()))}var Ve;function u(e,t="ok"){let i=d("#toast");i||(i=document.createElement("div"),i.id="toast",document.body.appendChild(i)),i.className="toast show "+t,i.textContent=e,clearTimeout(Ve),Ve=setTimeout(()=>i.classList.remove("show"),2600)}function P(e,t={}){return new Promise(i=>{let l=d("#confirmModal");l||(l=document.createElement("div"),l.id="confirmModal",l.className="modal",document.body.appendChild(l));let o=t.danger!==!1;l.innerHTML=`
-      <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="mTitle">
-        <div class="modal-ic ${o?"danger":"ask"}">${o?"🗑":"?"}</div>
-        <h3 class="modal-title" id="mTitle">${v(t.title||"තහවුරු කරන්න")}</h3>
-        <p class="modal-msg">${v(e)}</p>
-        <div class="modal-actions">
-          <button class="btn ghost" id="mCancel">${v(t.cancel||"අවලංගු කරන්න")}</button>
-          <button class="btn ${o?"danger":"primary"}" id="mOk">${v(t.ok||(o?"ඔව්, මකන්න":"තහවුරුයි"))}</button>
-        </div>
-      </div>`,l.classList.add("show");let s=n=>{n.key==="Escape"&&a(!1)},a=n=>{l.classList.remove("show"),document.removeEventListener("keydown",s),i(n)};d("#mOk",l).onclick=()=>a(!0),d("#mCancel",l).onclick=()=>a(!1),l.onclick=n=>{n.target===l&&a(!1)},document.addEventListener("keydown",s),setTimeout(()=>{let n=d("#mOk",l);n&&n.focus()},30)})}var Ye=new Set(["dashboard","groomGuests","brideGuests","confirmed","pending","notComing","changeState","liquor","agenda","gallery","blessings","budget","billing","seating"]),re=[{key:"dashboard",label:"දළ විශ්ලේෂණය",icon:"grid",group:"මුල් පිටුව"},{key:"weddingDetails",label:"මංගල තොරතුරු",icon:"ring",group:"මුල් පිටුව"},{key:"addGuests",label:"ආගන්තුකයන් එක් කිරීම",icon:"plus",group:"ආගන්තුකයෝ"},{key:"brideGuests",label:"කෞශානිගේ ආගන්තුකයෝ",icon:"woman",group:"ආගන්තුකයෝ"},{key:"groomGuests",label:"ගෞරවගේ ආගන්තුකයෝ",icon:"man",group:"ආගන්තුකයෝ"},{key:"confirmed",label:"පැමිණීම තහවුරු",icon:"check",group:"පිළිතුරු"},{key:"pending",label:"පිළිතුරු නොලත්",icon:"clock",group:"පිළිතුරු"},{key:"notComing",label:"නොපැමිණෙන",icon:"x",group:"පිළිතුරු"},{key:"changeState",label:"තත්ත්වය වෙනස් කිරීම",icon:"swap",group:"පිළිතුරු"},{key:"liquor",label:"මත්පැන් ගණන",icon:"cup",group:"සැලසුම්"},{key:"agenda",label:"වැඩසටහන සැකසීම",icon:"list",group:"සැලසුම්"},{key:"gallery",label:"ඡායාරූප එකතුව",icon:"image",group:"පෙනුම"},{key:"theme",label:"වර්ණ සැකසුම්",icon:"paint",group:"පෙනුම"},{key:"visibility",label:"කොටස් පෙන්වීම/සැඟවීම",icon:"eye",group:"පෙනුම"},{key:"blessings",label:"සුබ පැතුම් අනුමැතිය",icon:"heart",group:"පෙනුම"},{key:"budget",label:"අයවැය ගණනය",icon:"calc",group:"මූල්‍ය"},{key:"billing",label:"බිල්පත් හා ගෙවීම්",icon:"card",group:"මූල්‍ය"},{key:"seating",label:"ආසන සැලසුම",icon:"table",group:"සැලසුම්"},{key:"qr",label:"QR කේතය",icon:"qr",group:"මූල්‍ය"}];function ce(e,t){let l={dashboard:Ke,weddingDetails:vt,addGuests:bt,groomGuests:ft,brideGuests:wt,confirmed:yt,pending:$t,notComing:xt,changeState:_t,liquor:St,agenda:kt,gallery:Ct,theme:ut,visibility:ht,blessings:At,budget:Tt,billing:Lt,seating:Wt,qr:Nt}[e]||Ke;t.innerHTML="";try{l(t)}catch(o){console.error("[helasiritha] module '"+e+"' failed:",o);let s=document.createElement("div");s.className="panel",s.innerHTML=`<h3 style="color:var(--bad)">මොඩියුලය පූරණයේ දෝෂයකි</h3>
-      <p class="muted">මොඩියුලය: <b>${v(e)}</b> — කරුණාකර පිටුව නැවුම් කරන්න (refresh).</p>
-      <pre style="white-space:pre-wrap;overflow:auto;font-size:12px;line-height:1.5;background:#fff6f6;border:1px solid #f1c9c9;border-radius:10px;padding:12px;margin-top:8px">${v(String(o&&o.stack||o))}</pre>`,t.appendChild(s)}}function x(e,t,i){let l=document.createElement("div");return l.className="mod-head",l.innerHTML=`<h1>${v(t)}</h1>${i?`<p>${v(i)}</p>`:""}`,e.appendChild(l),e}function $(e,t=""){let i=document.createElement("div");return i.className="panel "+t,i.innerHTML=e,i}var de={primary:"#C9A574",secondary:"#F2E5C6",accent:"#A48354",surface:"#FFFBF2",text:"#221C01"},W=[["primary","මූලික රන්වන් වර්ණය","ශීර්ෂ, රන්වන් අවධාරණ"],["secondary","ද්විතීයික වර්ණය","මෘදු පසුබිම් වර්ණය"],["accent","අවධාරක වර්ණය","රේඛා හා දෙවන අවධාරණ"],["surface","පෘෂ්ඨ වර්ණය","කාඩ්පත්වල පසුබිම"],["text","අකුරු වර්ණය","ප්‍රධාන පෙළෙහි වර්ණය"]],We=e=>/^#[0-9a-fA-F]{6}$/.test(e);function ut(e){x(e,"වර්ණ සැකසුම්","පොදු අඩවියේ වර්ණ සැකැස්ම සජීවීව වෙනස් කරන්න");let t={...de,...C.theme||{}},i=W.map(([a,n,r])=>`
-    <div class="thm-row">
-      <div class="thm-meta"><div class="thm-label">${n}</div><div class="thm-hint muted">${r}</div></div>
-      <div class="thm-pick">
-        <input type="color" class="thm-color" data-k="${a}" value="${v(t[a])}" aria-label="${v(n)}">
-        <input type="text" class="thm-hex mini" data-k="${a}" value="${v(String(t[a]).toUpperCase())}" maxlength="7" spellcheck="false">
-      </div>
-    </div>`).join(""),l=$(`
-    <div class="panel-head"><h3>වර්ණ පුවරුව</h3>
-      <button class="btn ghost sm" id="thmReset">මුල් වර්ණ වෙත</button></div>
-    <div class="thm-list">${i}</div>
-    <div class="thm-preview" id="thmPrev">
-      <div class="thm-prev-card">
-        <div class="thm-prev-ay">ශුභ මංගලම්</div>
-        <div class="thm-prev-names">කෞශානි &amp; ගෞරව</div>
-        <div class="thm-prev-line">ඔබගේ පැමිණීම අපගේ භාග්‍යයකි</div>
+  <aside id="side" aria-label="මොඩියුල මෙනුව">
+    <div class="side-brand">
+      <img src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="" width="38" height="38">
+      <div>
+        <div class="bt foil">හෙළ සිරිත</div>
+        <div class="bs">Command Centre</div>
       </div>
     </div>
-    <div class="thm-actions">
-      <button class="btn primary" id="thmSave">වර්ණ සුරකින්න</button>
-    </div>`);e.appendChild(l);let o=d("#thmPrev",l),s=()=>W.forEach(([a])=>o.style.setProperty("--p-"+a,d(`.thm-hex[data-k="${a}"]`,l).value));f(".thm-color",l).forEach(a=>a.oninput=()=>{d(`.thm-hex[data-k="${a.dataset.k}"]`,l).value=a.value.toUpperCase(),s()}),f(".thm-hex",l).forEach(a=>a.oninput=()=>{let n=a.value.trim();n&&!n.startsWith("#")&&(n="#"+n),We(n)&&(d(`.thm-color[data-k="${a.dataset.k}"]`,l).value=n,s())}),s(),d("#thmReset",l).onclick=()=>{W.forEach(([a])=>{d(`.thm-color[data-k="${a}"]`,l).value=de[a],d(`.thm-hex[data-k="${a}"]`,l).value=de[a]}),s()},d("#thmSave",l).onclick=async()=>{let a={},n=!0;if(W.forEach(([p])=>{let b=d(`.thm-hex[data-k="${p}"]`,l).value.trim();b&&!b.startsWith("#")&&(b="#"+b),We(b)||(n=!1),a[p]=b.toUpperCase()}),!n){u("වර්ණ කේතය වැරදියි (#RRGGBB ආකාරයෙන් විය යුතුය).","bad");return}let r=d("#thmSave",l);r.disabled=!0,r.textContent="සුරකිමින්…";try{await Me(a),u("වර්ණ සැකසුම් සුරැකිණි ✓ — පොදු අඩවියේ සජීවීව යෙදේ.")}catch(p){u("සුරැකීම අසාර්ථකයි: "+(p.message||p),"bad")}r.disabled=!1,r.textContent="වර්ණ සුරකින්න"}}var pt={invitationCard:!0,countdown:!0,rsvp:!0,agenda:!0,gallery:!0,blessings:!0,loveNote:!0},mt=[["invitationCard","ආරාධනා පත්‍රය","මංගල ආරාධනා කාඩ්පත"],["countdown","කාල ගණනය","මංගල දිනට ඉතිරි කාලය"],["rsvp","පැමිණීම තහවුරුව","ආගන්තුක පිළිතුරු පෝරමය"],["agenda","වැඩසටහන","උත්සව කාලසටහන (අයිතම ඇතිවිට පමණි)"],["gallery","ඡායාරූප එකතුව","ඡායාරූප ගැලරිය (ඡායාරූප ඇතිවිට පමණි)"],["blessings","සුබ පැතුම්","ආගන්තුක සුබ පැතුම් පුවරුව"],["loveNote","ආදර පණිවිඩය","පිටුව පහළ ආදර සටහන"]];function ht(e){x(e,"කොටස් පෙන්වීම / සැඟවීම","පොදු අඩවියේ එක් එක් කොටස පෙන්වීම/සැඟවීම පාලනය කරන්න");let t={...pt,...C.visibility||{}},i=mt.map(([o,s,a])=>`
-    <div class="vis-row">
-      <div class="vis-meta"><div class="vis-label">${s}</div><div class="vis-hint muted">${a}</div></div>
-      <label class="switch"><input type="checkbox" class="vis-tg" data-k="${o}" ${t[o]?"checked":""}><span></span></label>
-    </div>`).join(""),l=$(`<div class="panel-head"><h3>දර්ශනය වන කොටස්</h3></div>
-    <div class="vis-list">${i}</div>
-    <p class="muted" style="margin-top:12px">මෙහි කරන සෑම වෙනසක්ම ක්ෂණිකව පොදු අඩවියට යෙදේ.</p>`);e.appendChild(l),f(".vis-tg",l).forEach(o=>o.onchange=async()=>{let s=o.dataset.k;try{await Ce({[s]:o.checked}),u(o.checked?"කොටස පෙන්වයි ✓":"කොටස සඟවයි ✓")}catch{o.checked=!o.checked,u("වෙනස් කිරීම අසාර්ථකයි.","bad")}})}function Ke(e){x(e,"දළ විශ්ලේෂණය","පද්ධතියේ සජීවී තත්ත්වය");let t=F(),i=t.filter(h=>h.side==="groom"),l=t.filter(h=>h.side==="bride"),o=(h,_)=>h.filter(S=>S.status===_).length,s=t.filter(h=>h.status==="confirmed"&&h.takingLiquor).length,a=h=>h.reduce((_,S)=>_+Math.max(1,Number(S.count)||1),0),n=a(t),r=a(t.filter(h=>h.status==="confirmed")),p=(h,_,S="")=>`<div class="stat ${S}"><div class="n">${h}</div><div class="l">${_}</div></div>`,b=$(`
-    <div class="stat-grid">
-      ${p(t.length,"මුළු ආරාධිත (පවුල්)")}
-      ${p(n,"මුළු පුද්ගලයන්")}
-      ${p(o(t,"confirmed"),"තහවුරු","ok")}
-      ${p(r,"තහවුරු පුද්ගලයන්","ok")}
-      ${p(o(t,"pending"),"පොරොත්තුවෙන්","warn")}
-      ${p(o(t,"declined"),"නොපැමිණෙන","bad")}
-      ${p(s,"මත්පැන් අවශ්‍ය")}
-    </div>`);e.appendChild(b);let E=$(`
-    <h3>පාර්ශව අනුව</h3>
-    <div class="split">
-      <div class="split-col">
-        <div class="split-name">කෞශානි (මනාලිය)</div>
-        <div class="split-row"><span>මුළු</span><b>${l.length}</b></div>
-        <div class="split-row"><span>තහවුරු</span><b>${o(l,"confirmed")}</b></div>
-        <div class="split-row"><span>පොරොත්තු</span><b>${o(l,"pending")}</b></div>
-        <div class="split-row"><span>නොපැමිණෙන</span><b>${o(l,"declined")}</b></div>
-      </div>
-      <div class="split-col">
-        <div class="split-name">ගෞරව (මනාලයා)</div>
-        <div class="split-row"><span>මුළු</span><b>${i.length}</b></div>
-        <div class="split-row"><span>තහවුරු</span><b>${o(i,"confirmed")}</b></div>
-        <div class="split-row"><span>පොරොත්තු</span><b>${o(i,"pending")}</b></div>
-        <div class="split-row"><span>නොපැමිණෙන</span><b>${o(i,"declined")}</b></div>
-      </div>
-    </div>`);e.appendChild(E);let c=[...t].filter(h=>h.respondedAt).sort((h,_)=>(_.respondedAt||0)-(h.respondedAt||0)).slice(0,8),N=$(`
-    <div class="panel-head"><h3>නවතම පිළිතුරු</h3>
-      <button class="btn sm" id="syncBtn">මංගල පහනේ ගණන යළි ගණනය</button></div>
-    ${c.length?`<table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>මත්පැන්</th></tr></thead><tbody>
-      ${c.map(h=>`<tr><td>${v(h.name)}</td><td>${h.side==="bride"?"කෞශානි":"ගෞරව"}</td>
-        <td>${gt(h.status)}</td><td>${h.takingLiquor?"ඔව්":"නැහැ"}</td></tr>`).join("")}
-    </tbody></table>`:'<p class="muted">තවම පිළිතුරු නැත.</p>'}`);e.appendChild(N),d("#syncBtn").onclick=async()=>{await ee(),u("මංගල පහනේ ගණන යාවත්කාලීන විය ✓")}}function gt(e){let t={confirmed:["තහවුරු","ok"],pending:["පොරොත්තු","warn"],declined:["නොපැමිණේ","bad"]},[i,l]=t[e]||t.pending;return`<span class="chip ${l}">${i}</span>`}function vt(e){x(e,"මංගල තොරතුරු","පොදු වෙබ් අඩවියේ දිස්වන මූලික තොරතුරු");let t=C.site||{},i=(h,_,S="",B="text")=>`
-    <div class="field"><label>${_}</label><input class="input" id="${h}" type="${B}" value="${v(S)}"></div>`,l=(h,_,S="")=>`<div class="field"><label>${_}</label><textarea class="input" id="${h}" rows="3">${v(S)}</textarea></div>`,o=(h,_,S)=>`<label class="switch"><input type="checkbox" id="${h}" ${S?"checked":""}><span></span>${_}</label>`,a=(t.weddingDateISO||"2028-01-12T09:15:00+05:30").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/),n=a?a[1]:"2028-01-12",r=a?a[2]:"09:15",p=parseInt(r.split(":")[0],10)<12?"පෙ.ව.":"ප.ව.",b=$(`
-    <h3>මනාල යුවළ</h3>
-    <div class="grid2">
-      ${i("wd_brideSi","මනාලියගේ නම (සිංහල)",t.brideNameSi||"කෞශානි")}
-      ${i("wd_groomSi","මනාලයාගේ නම (සිංහල)",t.groomNameSi||"ගෞරව")}
-      ${i("wd_brideEn","මනාලියගේ නම (English)",t.brideNameEn||"Kaushani")}
-      ${i("wd_groomEn","මනාලයාගේ නම (English)",t.groomNameEn||"Gaurawa")}
-      ${i("wd_brideParents","මනාලියගේ දෙමාපියන් / පෙළපත",t.brideParentsSi||"")}
-      ${i("wd_groomParents","මනාලයාගේ දෙමාපියන් / පෙළපත",t.groomParentsSi||"")}
-      ${i("wd_brideRel","මනාලිය හඳුන්වන වදන",t.brideRelationSi||"ආදරණීය දියණිය")}
-      ${i("wd_groomRel","මනාලයා හඳුන්වන වදන",t.groomRelationSi||"ආදරණීය පුත්")}
-    </div>
-    ${i("wd_head","ආරාධනා ශීර්ෂ පාඨය",t.invitationHeadingSi||"ශ්‍රී සුබ මංගලම්")}
 
-    <h3 style="margin-top:18px">මංගල දිනය හා වේලාව</h3>
-    <div class="grid2">
-      <div class="field"><label>මංගල දිනය (දින දර්ශනයෙන් තෝරන්න)</label><input class="input" id="wd_date" type="date" value="${n}"></div>
-      <div class="field"><label>උත්සව ආරම්භක වේලාව</label><input class="input" id="wd_clock" type="time" value="${r}"></div>
-      <div class="field"><label>පෙ.ව / ප.ව (තෝරන්න — ටයිප් කිරීම අවශ්‍ය නැත)</label>
-        <select class="input" id="wd_ampm">
-          <option value="පෙ.ව." ${p==="පෙ.ව."?"selected":""}>පෙ.ව. (පෙරවරු)</option>
-          <option value="ප.ව." ${p==="ප.ව."?"selected":""}>ප.ව. (පස්වරු)</option>
-        </select></div>
-      <div class="field"><label>උත්සව වේලා සටහන (ස්වයංක්‍රීයව සැකසේ)</label><input class="input" id="wd_timeprev" readonly></div>
-    </div>
+    <nav id="nav"></nav>
 
-    <h3 style="margin-top:18px">ස්ථානය හා වෙනත්</h3>
-    <div class="grid2">
-      ${i("wd_venue","ස්ථානයේ නම",t.venueName||"")}
-      ${i("wd_addr","ලිපිනය",t.venueAddress||"")}
-      ${i("wd_map","Google Maps සබැඳිය",t.mapUrl||"")}
-      ${i("wd_deadline","පිළිතුරු දිය යුතු අවසන් දිනය",t.rsvpDeadlineISO?t.rsvpDeadlineISO.slice(0,10):"","date")}
+    <div class="side-foot">
+      <div class="whoami"><i class="dot"></i><span id="whoEmail"></span></div>
+      <button id="logoutBtn" class="btn sm" style="width:100%" type="button">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        පිටවීම
+      </button>
     </div>
-    ${i("wd_audio","පසුබිම් සංගීත URL (Cloudinary, විකල්ප)",t.ambientAudioUrl||"")}
-    ${i("wd_coupleImg","යුවළගේ ඡායාරූපය/චිත්‍රය URL (විකල්ප — හිස්ව තැබුවොත් සම්ප්‍රදායික චිත්‍රය යෙදේ)",t.coupleImageUrl||"")}
-    ${l("wd_invite","ආරාධනා වදන් (සිංහල)",t.inviteWordingSi||"")}
-    ${l("wd_love","විශේෂ සටහන (සිංහල) — ඡේද වෙන් කිරීමට හිස් පේළියක් තබන්න",t.loveNoteSi||"")}
-    <div class="row">
-      ${o("wd_liquor","මත්පැන් කැමැත්ත අසන්න",t.allowLiquorPref!==!1)}
-      ${o("wd_diet","ආහාර අවශ්‍යතා අසන්න",t.allowDietaryPref!==!1)}
-    </div>
-    <button class="btn primary" id="wdSave">තොරතුරු සුරකින්න</button>
-  `);e.appendChild(b);let E=()=>{let h=d("#wd_clock").value||"09:15",[_,S]=h.split(":"),B=(parseInt(_,10)+11)%12+1;return`${d("#wd_ampm").value} ${B}.${S} සිට`},c=()=>{let h=parseInt((d("#wd_clock").value||"09:00").split(":")[0],10);d("#wd_ampm").value=h<12?"පෙ.ව.":"ප.ව."},N=()=>{d("#wd_timeprev").value=E()};d("#wd_clock").oninput=()=>{c(),N()},d("#wd_ampm").onchange=N,N(),d("#wdSave").onclick=async()=>{let h=d("#wd_date").value||"2028-01-12",_=d("#wd_clock").value||"09:15",S=d("#wd_deadline").value,B={brideNameSi:d("#wd_brideSi").value,groomNameSi:d("#wd_groomSi").value,brideNameEn:d("#wd_brideEn").value,groomNameEn:d("#wd_groomEn").value,brideParentsSi:d("#wd_brideParents").value,groomParentsSi:d("#wd_groomParents").value,brideRelationSi:d("#wd_brideRel").value,groomRelationSi:d("#wd_groomRel").value,invitationHeadingSi:d("#wd_head").value,weddingDateISO:`${h}T${_}:00+05:30`,ceremonyTimeLabel:E(),venueName:d("#wd_venue").value,venueAddress:d("#wd_addr").value,mapUrl:d("#wd_map").value,rsvpDeadlineISO:S?`${S}T23:59:00+05:30`:"",ambientAudioUrl:d("#wd_audio").value,coupleImageUrl:d("#wd_coupleImg").value.trim(),inviteWordingSi:d("#wd_invite").value,loveNoteSi:d("#wd_love").value,allowLiquorPref:d("#wd_liquor").checked,allowDietaryPref:d("#wd_diet").checked};try{await Ee(B),u("මංගල තොරතුරු සුරැකිණි ✓")}catch(tt){u("සුරැකීම අසාර්ථකයි: "+tt.message,"bad")}}}function bt(e){x(e,"ආගන්තුකයන් එක් කිරීම","තනි තනිව, ලැයිස්තුවක් ලෙස, හෝ Excel/CSV ගොනුවකින්");let t=$(`
-    <h3>තනි ආගන්තුකයෙක්</h3>
-    <div class="grid2">
-      <div class="field"><label>නම</label><input class="input" id="ag_name"></div>
-      <div class="field"><label>පවුලේ නාමය</label><input class="input" id="ag_fam"></div>
-    </div>
-    <div class="grid2">
-      <div class="field"><label>පාර්ශවය</label>
-        <select class="input" id="ag_side"><option value="bride">කෞශානි (මනාලිය)</option><option value="groom">ගෞරව (මනාලයා)</option></select></div>
-      <div class="field"><label>පැමිණෙන ගණන (පවුලේ සාමාජික සංඛ්‍යාව)</label><input class="input" id="ag_count" type="number" min="1" value="1"></div>
-    </div>
-    <button class="btn primary" id="ag_add">එක් කරන්න</button>
-  `);e.appendChild(t),d("#ag_add").onclick=async()=>{let o=d("#ag_name").value.trim();if(!o){u("නම ඇතුළත් කරන්න","warn");return}await Ae({name:o,familyName:d("#ag_fam").value,side:d("#ag_side").value,count:Math.max(1,parseInt(d("#ag_count").value,10)||1)}),d("#ag_name").value="",d("#ag_fam").value="",d("#ag_count").value="1",u("ආගන්තුකයා එක් කෙරිණි ✓")};let i=$(`
-    <h3>ලැයිස්තුවක් හෝ Excel/CSV ගොනුවක්</h3>
-    <p class="muted">ආකෘතිය: <code>නම, පවුලේ නාමය, ගණන</code> — ගණන වෛකල්පිතයි (පෙරනිමිය 1). Excel/Sheets වෙතින් කෙලින්ම අලවන්න, නැතහොත් <b>.xlsx / .csv</b> ගොනුවක් අමුණන්න.</p>
-    <div class="field"><label>පාර්ශවය</label>
-      <select class="input" id="bk_side"><option value="bride">කෞශානි (මනාලිය)</option><option value="groom">ගෞරව (මනාලයා)</option></select></div>
-    <div class="field"><label>Excel / CSV ගොනුවක් අමුණන්න</label>
-      <input class="input" id="bk_file" type="file" accept=".xlsx,.xls,.csv"></div>
-    <textarea class="input" id="bk_text" rows="8" placeholder="සුනිල් පෙරේරා, පෙරේරා පවුල, 4&#10;නිමල් සිල්වා, සිල්වා පවුල, 2"></textarea>
-    <button class="btn primary" id="bk_add" style="margin-top:10px">ලැයිස්තුව එක් කරන්න</button>
-  `);e.appendChild(i);let l=async o=>{let s=d("#bk_side").value,a=(o||[]).filter(r=>r&&r.name).map(r=>({...r,side:s}));if(!a.length){u("කිසිවක් හමු නොවීය","warn");return}let n=d("#bk_add");n.disabled=!0,n.textContent="එක් කරමින්…";try{let r=await Te(a);d("#bk_text").value="",d("#bk_file").value="",u(`ආගන්තුකයෝ ${r} දෙනෙක් එක් කෙරිණි ✓`)}catch(r){u("දෝෂයක්: "+r.message,"bad")}n.disabled=!1,n.textContent="ලැයිස්තුව එක් කරන්න"};d("#bk_add").onclick=()=>l(se(d("#bk_text").value.split(/\r?\n/).map(o=>o.split(/[,\t]/)))),d("#bk_file").onchange=async()=>{let o=d("#bk_file").files&&d("#bk_file").files[0];if(!o)return;let s=d("#bk_add");s.disabled=!0,s.textContent="කියවමින්…";try{let a;if(/\.csv$/i.test(o.name))a=se(ct(await o.text()));else{let n=await rt(),r=n.read(await o.arrayBuffer(),{type:"array"});a=se(n.utils.sheet_to_json(r.Sheets[r.SheetNames[0]],{header:1}))}if(s.disabled=!1,s.textContent="ලැයිස්තුව එක් කරන්න",!a.length){u("ගොනුවේ දත්ත හමු නොවීය","warn");return}await l(a)}catch(a){s.disabled=!1,s.textContent="ලැයිස්තුව එක් කරන්න",u("ගොනුව කියවීම අසාර්ථකයි: "+a.message,"bad")}}}function I(e,t,i={}){let l=F().filter(t).sort((b,E)=>b.name.localeCompare(E.name,"si")),o=$(`
-    <div class="panel-head">
-      <h3>${v(i.title||"ආගන්තුකයෝ")}</h3>
-      <input class="input sm-input" id="gtSearch" placeholder="සොයන්න…">
-    </div>
-    <div class="tbl-scroll">
-    <table class="tbl"><thead><tr>
-      <th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th>
-      ${i.liquor?"<th>මත්පැන්</th>":""}<th></th>
-    </tr></thead><tbody id="gtBody"></tbody></table></div>
-    <p class="muted" id="gtCount"></p>
-  `);e.appendChild(o);let s=d("#gtBody",o),a=d("#gtSearch",o),n=d("#gtCount",o);function r(b){s.innerHTML=b.map(c=>`
-      <tr data-id="${c.id}">
-        <td><input class="mini nm" data-id="${c.id}" value="${v(c.name)}" style="min-width:120px"></td>
-        <td><input class="mini fm" data-id="${c.id}" value="${v(c.familyName)}" style="min-width:110px"></td>
-        <td>${c.side==="bride"?"කෞශානි":"ගෞරව"}</td>
-        <td><input class="mini ct" data-id="${c.id}" type="number" min="1" value="${Math.max(1,Number(c.count)||1)}" style="width:60px"></td>
-        <td>
-          <select class="mini st" data-id="${c.id}">
-            <option value="pending" ${c.status==="pending"?"selected":""}>පොරොත්තු</option>
-            <option value="confirmed" ${c.status==="confirmed"?"selected":""}>තහවුරු</option>
-            <option value="declined" ${c.status==="declined"?"selected":""}>නොපැමිණේ</option>
-          </select>
-        </td>
-        ${i.liquor?`<td><input type="checkbox" class="lq" data-id="${c.id}" ${c.takingLiquor?"checked":""}></td>`:""}
-        <td><button class="btn xs danger del" data-id="${c.id}">මකන්න</button></td>
-      </tr>`).join("");let E=b.reduce((c,N)=>c+Math.max(1,Number(N.count)||1),0);n.textContent=`මුළු: ${b.length} (පුද්ගලයන් ${E})`,f(".nm",s).forEach(c=>c.onchange=()=>te(c.dataset.id,{name:c.value.trim()}).then(()=>u("නම යාවත්කාලීනයි"))),f(".fm",s).forEach(c=>c.onchange=()=>te(c.dataset.id,{familyName:c.value.trim()}).then(()=>u("පවුල යාවත්කාලීනයි"))),f(".ct",s).forEach(c=>c.onchange=()=>Ne(c.dataset.id,Math.max(1,parseInt(c.value,10)||1)).then(()=>u("ගණන යාවත්කාලීනයි"))),f(".st",s).forEach(c=>c.onchange=()=>qe(c.dataset.id,c.value).then(()=>u("තත්ත්වය යාවත්කාලීනයි"))),f(".lq",s).forEach(c=>c.onchange=()=>Ge(c.dataset.id,c.checked).then(()=>u("යාවත්කාලීනයි"))),f(".del",s).forEach(c=>c.onclick=async()=>{await P("මෙම ආගන්තුකයා මැකීමට අවශ්‍යද?")&&Le(c.dataset.id).then(()=>u("මකා දැමිණි"))})}let p=()=>{let b=a.value.trim().toLowerCase();r(b?l.filter(E=>(E.name+" "+E.familyName).toLowerCase().includes(b)):l)};a.oninput=p,r(l)}function ft(e){x(e,"ගෞරවගේ ආගන්තුකයෝ","මනාලයාගේ පාර්ශවය"),I(e,t=>t.side==="groom",{title:"මනාලයාගේ ආගන්තුකයෝ",liquor:!0})}function wt(e){x(e,"කෞශානිගේ ආගන්තුකයෝ","මනාලියගේ පාර්ශවය"),I(e,t=>t.side==="bride",{title:"මනාලියගේ ආගන්තුකයෝ",liquor:!0})}function yt(e){x(e,"පැමිණීම තහවුරු","පැමිණෙන බව තහවුරු කළ අය"),I(e,t=>t.status==="confirmed",{title:"තහවුරු වූ අය",liquor:!0})}function $t(e){x(e,"පිළිතුරු නොලත්","තවම පිළිතුරු නොදුන් අය"),I(e,t=>t.status==="pending",{title:"පොරොත්තුවෙන්"})}function xt(e){x(e,"නොපැමිණෙන","පැමිණිය නොහැකි බව දැනුම් දුන් අය"),I(e,t=>t.status==="declined",{title:"නොපැමිණෙන අය"})}function _t(e){x(e,"තත්ත්වය වෙනස් කිරීම","ඕනෑම ආගන්තුකයෙකුගේ පිළිතුර සැකසීම"),I(e,()=>!0,{title:"සියලු ආගන්තුකයෝ",liquor:!0})}function St(e){x(e,"මත්පැන් ගණන","තහවුරු වූ අය අතර මත්පැන් අවශ්‍ය ගණන");let t=F().filter(o=>o.status==="confirmed"),i=t.filter(o=>o.takingLiquor),l=(o,s,a="")=>`<div class="stat ${a}"><div class="n">${o}</div><div class="l">${s}</div></div>`;e.appendChild($(`<div class="stat-grid">
-    ${l(i.length,"මත්පැන් අවශ්‍ය","ok")}
-    ${l(t.length-i.length,"අවශ්‍ය නැත")}
-    ${l(t.length,"මුළු තහවුරු")}
-  </div>`)),I(e,o=>o.status==="confirmed",{title:"තහවුරු වූ අයගේ මත්පැන් කැමැත්ත",liquor:!0})}var le=["poruwa","lamp","lotus","sesath","mandala","mayura","ring","feast"];function kt(e){x(e,"වැඩසටහන සැකසීම","මංගල දිනයේ වැඩසටහන් පෙළගැස්ම");let t=null,i=$(`
-    <h3 id="ag_formTitle">නව අයිතමයක්</h3>
-    <div class="grid2">
-      <div class="field"><label>වේලාව</label><input class="input" id="ag_time" placeholder="පෙ.ව. 9.15"></div>
-      <div class="field"><label>මාතෘකාව</label><input class="input" id="ag_title" placeholder="පෝරුව මංගල්‍යය"></div>
-    </div>
-    <div class="field"><label>විස්තරය</label><textarea class="input" id="ag_desc" rows="2"></textarea></div>
-    <div class="grid2">
-      <div class="field"><label>අයිකනය</label><select class="input" id="ag_icon">${le.map(n=>`<option value="${n}">${n}</option>`).join("")}</select></div>
-      <div class="field"><label>අනුපිළිවෙළ</label><input class="input" id="ag_order" type="number" value="${C.agenda.length+1}"></div>
-    </div>
-    <div class="row">
-      <button class="btn primary" id="ag_save">අයිතමය එක් කරන්න</button>
-      <button class="btn ghost" id="ag_cancel" hidden>සංස්කරණය අවලංගු</button>
-    </div>
-  `);e.appendChild(i);let l=()=>{t=null,d("#ag_title").value="",d("#ag_desc").value="",d("#ag_time").value="",d("#ag_icon").value=le[0],d("#ag_order").value=C.agenda.length+1,d("#ag_formTitle").textContent="නව අයිතමයක්",d("#ag_save").textContent="අයිතමය එක් කරන්න",d("#ag_cancel").hidden=!0};d("#ag_cancel").onclick=l,d("#ag_save").onclick=async()=>{let n=d("#ag_title").value.trim();if(!n){u("මාතෘකාව ඇතුළත් කරන්න","warn");return}let r={timeLabel:d("#ag_time").value,titleSi:n,descSi:d("#ag_desc").value,icon:d("#ag_icon").value,order:Number(d("#ag_order").value)||1};try{t?(await ae(t,r),u("අයිතමය යාවත්කාලීන විය ✓")):(await De({...r,visible:!0}),u("අයිතමය එක් කෙරිණි ✓")),l()}catch(p){u("දෝෂයක්: "+p.message,"bad")}};let o=$('<h3>දැනට ඇති අයිතම</h3><div id="agList"></div>');e.appendChild(o);let s=d("#agList",o),a=[...C.agenda].sort((n,r)=>(n.order||0)-(r.order||0));s.innerHTML=a.length?a.map(n=>`
-    <div class="line">
-      <div><b>${v(n.timeLabel||"")}</b> · ${v(n.titleSi||"")} <span class="muted">(${v(n.icon||"")})</span><br><span class="muted">${v(n.descSi||"")}</span></div>
-      <div class="line-actions">
-        <button class="btn xs ghost edit" data-id="${n.id}">සංස්කරණය</button>
-        <button class="btn xs ${n.visible===!1?"":"ghost"} vis" data-id="${n.id}" data-v="${n.visible===!1?1:0}">${n.visible===!1?"පෙන්වන්න":"සඟවන්න"}</button>
-        <button class="btn xs danger del" data-id="${n.id}">මකන්න</button>
+  </aside>
+
+  <div id="content">
+    <header class="topbar">
+      <button id="menuBtn" class="btn icon ghost" type="button" aria-label="මෙනුව විවෘත කරන්න">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="tt">
+        <h2 id="pageTitle">දළ විශ්ලේෂණය</h2>
+        <div class="ts" id="pageSub">පද්ධතියේ වත්මන් තත්ත්වය</div>
       </div>
-    </div>`).join(""):'<p class="muted">තවම අයිතම නැත.</p>',f(".edit",s).forEach(n=>n.onclick=()=>{let r=a.find(p=>p.id===n.dataset.id);r&&(t=r.id,d("#ag_time").value=r.timeLabel||"",d("#ag_title").value=r.titleSi||"",d("#ag_desc").value=r.descSi||"",d("#ag_icon").value=r.icon||le[0],d("#ag_order").value=r.order||1,d("#ag_formTitle").textContent="අයිතමය සංස්කරණය",d("#ag_save").textContent="යාවත් කරන්න",d("#ag_cancel").hidden=!1,d("#ag_title").focus(),d("#ag_title").scrollIntoView({behavior:"smooth",block:"center"}))}),f(".vis",s).forEach(n=>n.onclick=()=>ae(n.dataset.id,{visible:n.dataset.v==="1"}).then(()=>u("යාවත්කාලීනයි"))),f(".del",s).forEach(n=>n.onclick=async()=>{await P("මෙම අයිතමය මකන්නද?")&&Pe(n.dataset.id).then(()=>u("මකා දැමිණි"))})}function Et(e,t=400){return e.storage==="drive"&&e.fileId?`https://drive.google.com/thumbnail?id=${e.fileId}&sz=w${t}`:e.url&&e.url.includes("/upload/")?e.url.replace("/upload/",`/upload/w_${t},f_auto,q_auto/`):e.url||""}function Mt(e,t=2e3,i=.85){return new Promise(l=>{if(!/^image\//.test(e.type||""))return l(e);let o=new FileReader;o.onload=()=>{let s=new Image;s.onload=()=>{let a=s.naturalWidth||s.width,n=s.naturalHeight||s.height;if(Math.max(a,n)>t){let p=t/Math.max(a,n);a=Math.round(a*p),n=Math.round(n*p)}let r=document.createElement("canvas");r.width=a,r.height=n,r.getContext("2d").drawImage(s,0,0,a,n),r.toBlob(p=>{if(!p)return l(e);let b=(e.name||"photo").replace(/\.[^.]+$/,"");l(new File([p],b+".jpg",{type:"image/jpeg"}))},"image/jpeg",i)},s.onerror=()=>l(e),s.src=o.result},o.onerror=()=>l(e),o.readAsDataURL(e)})}function Ct(e){x(e,"ඡායාරූප එකතුව","ඡායාරූප ආරක්ෂිතව ගබඩා වී, ක්ෂණිකව මංගල පිටුවේ පෙන්වයි");let t=$(`
-    <h3>නව ඡායාරූප</h3>
-    <input type="file" id="gl_file" accept="image/*" multiple class="input">
-    <div class="progress" id="gl_prog" hidden><div class="bar"></div></div>
-    <p class="muted">ඡායාරූප කිහිපයක් එකවර තෝරන්න. ස්වයංක්‍රීයව ප්‍රශස්ත කර (auto-optimise) උඩුගත වේ. Vercel සහ GitHub Pages යන දෙකෙහිම ක්‍රියා කරයි — සේවාදායකයක් අවශ්‍ය නැත.</p>
-  `);e.appendChild(t);let i=d("#gl_file",t),l=d("#gl_prog",t),o=d(".bar",l);i.onchange=async()=>{let n=Array.from(i.files||[]);if(!n.length)return;l.hidden=!1;let r=0;for(let p=0;p<n.length;p++)try{o.style.width="6%";let b=await Mt(n[p],2e3,.85),E=await je(b,c=>{o.style.width=Math.max(6,c)+"%"});await Be({url:E.secure_url,publicId:E.public_id,storage:"cloudinary",alt:(n[p].name||"").replace(/\.[^.]+$/,""),order:C.gallery.length+p+1}),r++,u(`උඩුගත විය (${r}/${n.length}) ✓`)}catch(b){u("උඩුගත වීම අසාර්ථකයි: "+(b.message||b),"bad")}o.style.width="0%",l.hidden=!0,i.value=""};let s=$(`<h3>එකතුව (${C.gallery.length})</h3><div class="gal-grid" id="galGrid"></div>`);e.appendChild(s);let a=d("#galGrid",s);a.innerHTML=C.gallery.length?C.gallery.map(n=>`
-    <div class="gal-cell">
-      <img loading="lazy" src="${v(Et(n))}" alt="${v(n.alt||"")}">
-      <button class="btn xs danger del" data-id="${n.id}">මකන්න</button>
-    </div>`).join(""):'<p class="muted">තවම ඡායාරූප නැත.</p>',f(".del",a).forEach(n=>n.onclick=async()=>{await P("මෙම ඡායාරූපය එකතුවෙන් මකන්නද?")&&Re(n.dataset.id).then(()=>u("මකා දැමිණි"))})}function At(e){x(e,"සුබ පැතුම් අනුමැතිය","පොදු අඩවියේ දිස්වීමට පෙර අනුමත කරන්න");let t=[...C.blessings].sort((n,r)=>(r.createdAt||0)-(n.createdAt||0)),i=t.filter(n=>!n.approved),l=t.filter(n=>n.approved),o=(n,r)=>$(`<h3>${r} (${n.length})</h3>${n.length?n.map(p=>`
-    <div class="line">
-      <div><i>"${v(p.message)}"</i><br><span class="muted">— ${v(p.guestName)}</span></div>
-      <div class="line-actions">
-        ${p.approved?`<button class="btn xs ghost un" data-id="${p.id}">සැඟවීම</button>`:`<button class="btn xs ok ap" data-id="${p.id}">අනුමත</button>`}
-        <button class="btn xs danger del" data-id="${p.id}">මකන්න</button>
-      </div></div>`).join(""):'<p class="muted">කිසිවක් නැත.</p>'}`),s=o(i,"අනුමැතිය බලාපොරොත්තුවෙන්");e.appendChild(s);let a=o(l,"අනුමත වූ");e.appendChild(a),f(".ap",e).forEach(n=>n.onclick=()=>ne(n.dataset.id,!0).then(()=>u("අනුමත කෙරිණි ✓"))),f(".un",e).forEach(n=>n.onclick=()=>ne(n.dataset.id,!1).then(()=>u("සඟවන ලදී"))),f(".del",e).forEach(n=>n.onclick=async()=>{await P("මෙම සුබ පැතුම මකන්නද?")&&Ue(n.dataset.id).then(()=>u("මකා දැමිණි"))})}function Tt(e){x(e,"අයවැය ගණනය","මංගල වියදම් සැලසුම");let t=[...C.budget].sort((s,a)=>(s.createdAt||0)-(a.createdAt||0)),i=t.reduce((s,a)=>s+(Number(a.amount)||0),0),l=$(`
-    <h3>නව වියදම් අයිතමයක්</h3>
-    <div class="grid2">
-      <div class="field"><label>විස්තරය</label><input class="input" id="bd_label" placeholder="හෝටල් ගාස්තු"></div>
-      <div class="field"><label>මුදල (රු.)</label><input class="input" id="bd_amt" type="number" min="0"></div>
-    </div>
-    <button class="btn primary" id="bd_add">එක් කරන්න</button>`);e.appendChild(l),d("#bd_add").onclick=async()=>{let s=d("#bd_label").value.trim(),a=Number(d("#bd_amt").value)||0;if(!s){u("විස්තරය ඇතුළත් කරන්න","warn");return}await ze({label:s,amount:a}),d("#bd_label").value="",d("#bd_amt").value="",u("එක් කෙරිණි ✓")};let o=$(`
-    <div class="panel-head"><h3>වියදම් ලැයිස්තුව</h3><div class="big-total">මුළු: ${oe(i)}</div></div>
-    ${t.length?`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල (රු.)</th><th></th></tr></thead><tbody>
-      ${t.map(s=>`<tr data-id="${s.id}">
-        <td><input class="mini bl" data-id="${s.id}" value="${v(s.label)}" style="min-width:160px"></td>
-        <td><input class="mini ba" data-id="${s.id}" type="number" min="0" value="${Number(s.amount)||0}" style="width:120px"></td>
-        <td><button class="btn xs danger del" data-id="${s.id}">මකන්න</button></td></tr>`).join("")}
-    </tbody></table></div>`:'<p class="muted">තවම අයිතම නැත.</p>'}`);e.appendChild(o),f(".bl",o).forEach(s=>s.onchange=()=>ie(s.dataset.id,{label:s.value.trim()}).then(()=>u("යාවත්කාලීනයි"))),f(".ba",o).forEach(s=>s.onchange=()=>ie(s.dataset.id,{amount:Number(s.value)||0}).then(()=>u("යාවත්කාලීනයි"))),f(".del",o).forEach(s=>s.onclick=async()=>{await P("මෙම වියදම් අයිතමය මකන්නද?")&&Oe(s.dataset.id).then(()=>u("මකා දැමිණි"))})}function Lt(e){x(e,"බිල්පත් හා ගෙවීම්","ගෙවීම් සටහන් කර තබා ගන්න");let t=[...C.billing].sort((a,n)=>(a.createdAt||0)-(n.createdAt||0)),i=t.reduce((a,n)=>a+(Number(n.amount)||0),0),l=t.filter(a=>a.paid).reduce((a,n)=>a+(Number(n.amount)||0),0),o=$(`
-    <h3>නව ගෙවීමක්</h3>
-    <div class="grid2">
-      <div class="field"><label>විස්තරය</label><input class="input" id="bl_label" placeholder="කේක් ගෙවීම"></div>
-      <div class="field"><label>මුදල (රු.)</label><input class="input" id="bl_amt" type="number" min="0"></div>
-    </div>
-    <label class="switch"><input type="checkbox" id="bl_paid"><span></span>ගෙවා අවසන්</label>
-    <button class="btn primary" id="bl_add" style="margin-top:8px">එක් කරන්න</button>`);e.appendChild(o),d("#bl_add").onclick=async()=>{let a=d("#bl_label").value.trim();if(!a){u("විස්තරය ඇතුළත් කරන්න","warn");return}await He({label:a,amount:Number(d("#bl_amt").value)||0,paid:d("#bl_paid").checked}),d("#bl_label").value="",d("#bl_amt").value="",d("#bl_paid").checked=!1,u("එක් කෙරිණි ✓")};let s=$(`
-    <div class="panel-head"><h3>ගෙවීම්</h3><div class="big-total">ගෙවා ඇත ${oe(l)} / ${oe(i)}</div></div>
-    ${t.length?`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>විස්තරය</th><th>මුදල (රු.)</th><th>තත්ත්වය</th><th></th></tr></thead><tbody>
-      ${t.map(a=>`<tr data-id="${a.id}">
-        <td><input class="mini bl" data-id="${a.id}" value="${v(a.label)}" style="min-width:150px"></td>
-        <td><input class="mini ba" data-id="${a.id}" type="number" min="0" value="${Number(a.amount)||0}" style="width:110px"></td>
-        <td><button class="btn xs ${a.paid?"ok":"ghost"} pay" data-id="${a.id}" data-p="${a.paid?0:1}">${a.paid?"ගෙවා ඇත":"ගෙවිය යුතු"}</button></td>
-        <td><button class="btn xs danger del" data-id="${a.id}">මකන්න</button></td></tr>`).join("")}
-    </tbody></table></div>`:'<p class="muted">තවම ගෙවීම් නැත.</p>'}`);e.appendChild(s),f(".bl",s).forEach(a=>a.onchange=()=>X(a.dataset.id,{label:a.value.trim()}).then(()=>u("යාවත්කාලීනයි"))),f(".ba",s).forEach(a=>a.onchange=()=>X(a.dataset.id,{amount:Number(a.value)||0}).then(()=>u("යාවත්කාලීනයි"))),f(".pay",s).forEach(a=>a.onclick=()=>X(a.dataset.id,{paid:a.dataset.p==="1"}).then(()=>u("යාවත්කාලීනයි"))),f(".del",s).forEach(a=>a.onclick=async()=>{await P("මෙම ගෙවීම් අයිතමය මකන්නද?")&&Fe(a.dataset.id).then(()=>u("මකා දැමිණි"))})}function Wt(e){x(e,"ආසන සැලසුම","තහවුරු වූ ආගන්තුකයින්ට මේස අංක පවරන්න");let t=F().filter(o=>o.status==="confirmed").sort((o,s)=>o.name.localeCompare(s.name,"si")),i=t.filter(o=>!o.tableNumber),l=[...new Set(t.filter(o=>o.tableNumber).map(o=>o.tableNumber))].sort((o,s)=>o-s);let s=$(
-    `<div class="stat-grid" style="margin-bottom:16px">
-      <div class="stat ok"><div class="n">${t.length}</div><div class="l">මුළු තහවුරු</div></div>
-      <div class="stat ${i.length?"warn":"ok"}"><div class="n">${i.length}</div><div class="l">පවරන්න ඉතිරි</div></div>
-      <div class="stat"><div class="n">${l.length}</div><div class="l">මේස ගණන</div></div>
-    </div>
-    <div class="panel-head"><h3>ආගන්තුකයින්ට මේස පවරන්න</h3>
-      <input class="input sm-input" id="seatSearch" placeholder="සොයන්න…"></div>
-    <div class="tbl-scroll">
-    <table class="tbl"><thead><tr>
-      <th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>මේස අංකය</th><th></th>
-    </tr></thead><tbody id="seatBody"></tbody></table></div>
-    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <label style="font-weight:600">නව මේසයක් එක් කරන්න:</label>
-      <input class="input" id="newTableNum" type="number" min="1" placeholder="මේස අංකය" style="max-width:120px">
-      <button class="btn primary sm" id="addTableBtn">එක් කරන්න</button>
-    </div>
-    <div id="tableSummary" style="margin-top:16px"></div>`
-  );e.appendChild(s);let a=d("#seatBody",s),n=d("#seatSearch",s);function r(o){a.innerHTML=o.map(c=>`
-      <tr data-id="${c.id}">
-        <td>${v(c.name)}</td><td>${v(c.familyName)}</td>
-        <td>${c.side==="bride"?"කෞශානි":"ගෞරව"}</td>
-        <td>${c.count}</td>
-        <td><input class="mini tbl-num" data-id="${c.id}" type="number" min="1" value="${c.tableNumber||""}" style="width:80px" placeholder="—"></td>
-        <td><button class="btn xs danger unassign" data-id="${c.id}" ${!c.tableNumber?"disabled":""}>ඉවත් කරන්න</button></td>
-      </tr>`).join("")||'<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">තහවුරු වූ ආගන්තුකයින් නැත.</td></tr>';f(".tbl-num",a).forEach(c=>c.onchange=()=>{let val=parseInt(c.value,10)||null;te(c.dataset.id,{tableNumber:val}).then(()=>u(val?`මේස ${val} පවරන ලදී ✓`:"ඉවත් කරන ලදී"))});f(".unassign",a).forEach(c=>c.onclick=()=>te(c.dataset.id,{tableNumber:null}).then(()=>u("ඉවත් කරන ලදී ✓")))}function o(){let c=n.value.trim().toLowerCase();r(c?i.filter(p=>(p.name+" "+p.familyName).toLowerCase().includes(c)):i)}n.oninput=o,r(i);d("#addTableBtn",s).onclick=async()=>{let c=parseInt(d("#newTableNum").value,10);if(!c||c<1){u("වලංගු මේස අංකයක් ඇතුළත් කරන්න","warn");return}let unassigned=i.filter(p=>!p.tableNumber);if(!unassigned.length){u("පවරන්න ඉතිරි ආගන්තුකයින් නැත","warn");return}let batch=lt(m),count=0;for(let p of unassigned){if(p.tableNumber)continue;batch.update(y(m,"guests",p.id),{tableNumber:c});count++;if(count>=20)break}await batch.commit();d("#newTableNum").value="";u(`${count} දෙනෙක් මේස ${c} ට පවරන ලදී ✓`)};let c=()=>{let summary='<h3 style="margin-bottom:10px">මේස සාරාංශය</h3>';if(!l.length){summary+='<p class="muted">තවම මේස පවරා නැත.</p>'}else{summary+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';for(let num of l){let guests=t.filter(p=>p.tableNumber===num);let people=guests.reduce((p,q)=>p+Math.max(1,Number(q.count)||1),0);summary+=`<div class="panel" style="padding:12px;text-align:center"><div style="font-weight:800;font-size:1.3rem;color:var(--gold-d)">මේස ${num}</div><div style="color:var(--muted);font-size:.85rem;margin-top:4px">${guests.length} පවුල් · ${people} පුද්ගලයන්</div></div>`}summary+='</div>'}d("#tableSummary",s).innerHTML=summary};c()}function Nt(e){x(e,"QR කේතය","පොදු ආරාධනා පිටුවට QR කේතයක්");let t="https://helasiritha.vercel.app",i=$(`
-    <div class="field"><label>QR කේතය යොමුවන සබැඳිය</label><input class="input" id="qr_url" value="${t}"></div>
-    <div class="qr-stage">
-      <img id="qr_img" alt="QR" width="300" height="300" src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(t)}">
-    </div>
-    <div class="row">
-      <button class="btn primary" id="qr_gen">යළි සෑදීම</button>
-      <a class="btn ghost" id="qr_dl" download="helasiritha-qr.png" href="https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(t)}" target="_blank" rel="noopener">බාගත කරන්න</a>
-    </div>
-    <p class="muted">මෙය මුද්‍රණය කර මංගල ආරාධනා පත්‍රවල හෝ වෙබ් අඩවියේ බෙදාගත හැක.</p>`);e.appendChild(i);let l=()=>{let o=d("#qr_url").value.trim()||t;d("#qr_img").src=`https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=12&data=${encodeURIComponent(o)}`,d("#qr_dl").href=`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(o)}`};d("#qr_gen").onclick=l}var g=(e,t=document)=>t.querySelector(e),Ze=(e,t=document)=>Array.from(t.querySelectorAll(e)),Qe={grid:"M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",ring:"M12 7a5 5 0 100 10 5 5 0 000-10zM9 3l3 3 3-3",plus:"M12 5v14M5 12h14",man:"M12 8a3 3 0 100-6 3 3 0 000 6zM6 21v-2a6 6 0 0112 0v2",woman:"M12 8a3 3 0 100-6 3 3 0 000 6zM12 11v10M9 18h6",check:"M20 6L9 17l-5-5",clock:"M12 7v5l3 3M12 3a9 9 0 100 18 9 9 0 000-18z",x:"M6 6l12 12M18 6L6 18",swap:"M7 7h11l-3-3M17 17H6l3 3",table:"M3 5h18v14H3zM3 10h18M9 5v14",cup:"M5 4h12v6a6 6 0 01-12 0zM17 6h2a2 2 0 010 4h-2M5 20h12",list:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",image:"M3 5h18v14H3zM8 11l3 3 5-6 4 5",paint:"M12 3a9 9 0 000 18c1 0 1-1 1-2a2 2 0 012-2h2a3 3 0 003-3 7 7 0 00-11-11z",eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z",heart:"M12 21s-7-4.5-10-9a4 4 0 017-3 4 4 0 017 3c-3 4.5-10 9-10 9z",calc:"M5 3h14v18H5zM9 7h6M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01",card:"M2 6h20v12H2zM2 10h20",qr:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v3M17 20h4"},It=e=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${Qe[e]||Qe.grid}"/></svg>`,K="dashboard",ue=!1;function qt(e){g("#app").hidden=!0,g("#login").hidden=!1,e==="forbidden"&&(g("#loginErr").textContent=q("auth/not-admin"))}function Gt(){g("#googleBtn").onclick=async()=>{g("#loginErr").textContent="";let e=g("#googleBtn"),t=e.textContent;e.disabled=!0,e.textContent="පිවිසෙමින්…";try{await be()}catch(i){g("#loginErr").textContent=q(i.code)}e.disabled=!1,e.textContent=t},he.then(()=>{j&&g("#loginErr")&&(g("#loginErr").textContent=q(j.code))}),g("#loginForm").addEventListener("submit",async e=>{e.preventDefault(),g("#loginErr").textContent="";let t=g("#loginSubmit");t.disabled=!0,t.textContent="පිවිසෙමින්…";try{await ve(g("#email").value,g("#password").value)}catch(i){g("#loginErr").textContent=q(i.code)}t.disabled=!1,t.textContent="පිවිසෙන්න"}),g("#forgotBtn").onclick=async()=>{let e=g("#email").value.trim()||R;try{await fe(e),u("මුරපද යළි පිහිටුවීමේ ඊමේල් එවන ලදී.")}catch(t){g("#loginErr").textContent=q(t.code)}}}function Dt(e){g("#login").hidden=!0,g("#app").hidden=!1,g("#whoami").textContent=e.email,ue||(ue=!0,ke(),Pt()),et(K)}function Pt(){let e=g("#nav"),t={};re.forEach(i=>{(t[i.group]=t[i.group]||[]).push(i)}),e.innerHTML=Object.entries(t).map(([i,l])=>`
-    <div class="nav-group"><div class="nav-group-label">${i}</div>
-      ${l.map(o=>`<button class="nav-item" data-key="${o.key}">${It(o.icon)}<span>${o.label}</span></button>`).join("")}
-    </div>`).join(""),Ze(".nav-item",e).forEach(i=>i.onclick=()=>{et(i.dataset.key),Bt()})}function et(e){K=e,Ze(".nav-item").forEach(i=>i.classList.toggle("active",i.dataset.key===e));let t=re.find(i=>i.key===e);g("#crumb").textContent=t?t.label:"",ce(e,g("#main")),g("#main").scrollTop=0}var Je;Se(()=>{if(!ue||!Ye.has(K))return;let e=document.activeElement;e&&e.closest&&e.closest("#main")&&/INPUT|TEXTAREA|SELECT/.test(e.tagName)&&e.type!=="checkbox"||(clearTimeout(Je),Je=setTimeout(()=>ce(K,g("#main")),350))});g("#logoutBtn").onclick=async()=>{await we(),u("පිටවිය.")};g("#menuBtn").onclick=()=>g("#sidebar").classList.toggle("open");function Bt(){window.matchMedia("(max-width:900px)").matches&&g("#sidebar").classList.remove("open")}g("#scrim").onclick=()=>g("#sidebar").classList.remove("open");Gt();ge(Dt,qt);
+      <span class="sp"></span>
+      <span class="sync-pill" id="syncPill" title="Firestore සජීවී සම්බන්ධතාවය"><i class="dot"></i><span id="syncTxt">සජීවී</span></span>
+      <a class="btn sm ghost" href="https://helasiritha.vercel.app" target="_blank" rel="noopener noreferrer">පොදු අඩවිය ↗</a>
+    </header>
 
-</script>
+    <main id="main">
+      <section class="mod" data-panel="dashboard"  hidden><div id="p-dashboard"></div></section>
+      <section class="mod" data-panel="details"    hidden><div id="p-details"></div></section>
+      <section class="mod" data-panel="guests"     hidden><div id="p-guests"></div></section>
+      <section class="mod" data-panel="rsvp"       hidden><div id="p-rsvp"></div></section>
+      <section class="mod" data-panel="agenda"     hidden><div id="p-agenda"></div></section>
+      <section class="mod" data-panel="gallery"    hidden><div id="p-gallery"></div></section>
+      <section class="mod" data-panel="blessings"  hidden><div id="p-blessings"></div></section>
+      <section class="mod" data-panel="visibility" hidden><div id="p-visibility"></div></section>
+      <section class="mod" data-panel="theme"      hidden><div id="p-theme"></div></section>
+      <section class="mod" data-panel="seating"    hidden><div id="p-seating"></div></section>
+    </main>
+  </div>
+</div>
+
+<div id="scrim"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="confirmModal" role="alertdialog" aria-modal="true"></div>
+
+<noscript>
+  <div style="padding:44px 20px;text-align:center;font-family:'Noto Sans Sinhala',sans-serif;color:#EDE7DB">
+    මෙම පරිපාලන පුවරුව භාවිතයට JavaScript අවශ්‍යයි.
+  </div>
+</noscript>
+
+<script type="module" src="admin.js"></script>
 </body>
 </html>
