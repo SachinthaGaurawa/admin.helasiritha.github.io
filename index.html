@@ -81,6 +81,11 @@
 <!-- ══════════════════════════════ APP SHELL ══════════════════════════════ -->
 <div id="app" hidden>
 
+  <!-- Scrim MUST live inside #app: #app is a stacking context (position:relative;
+       z-index:2), so a root-level scrim would paint above the drawer and swallow
+       every click. Inside #app it correctly sits under #side (55 < 60). -->
+  <div id="scrim"></div>
+
   <aside id="side" aria-label="මොඩියුල මෙනුව">
     <div class="side-brand">
       <img src="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png" alt="" width="38" height="38">
@@ -133,7 +138,6 @@
   </div>
 </div>
 
-<div id="scrim"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="modal" id="confirmModal" role="alertdialog" aria-modal="true"></div>
 

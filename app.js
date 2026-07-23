@@ -492,7 +492,9 @@ function startSubscriptions() {
     const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
     a.sort((x, y) => (num(x.order, 1e9) - num(y.order, 1e9))
       || (((x.ts && x.ts.seconds) || 0) - ((y.ts && y.ts.seconds) || 0)));
-    gallery = a; refresh("gallery"); refresh("dashboard");
+    gallery = a;
+    if (!galBusy) refresh("gallery");          /* never redraw mid-reorder */
+    refresh("dashboard");
   }, warn("gallery"));
 
   onSnapshot(collection(db, "guests"), (qs) => {
@@ -1239,29 +1241,90 @@ function readAgenda() {
   }));
 }
 
-/* ════════════════════════ 6 · GALLERY MANAGER ══════════════════════════════ */
+/* ════════════════════════ 6 · GALLERY MANAGER (custom sort) ════════════════
+   Ordering is authoritative: the number written to `order` is exactly the slot
+   the photo takes on the public site (its app.js sorts by `order` ascending).
+
+   THREE ways to reorder, because HTML5 drag-and-drop never fires from a touch
+   screen — on a phone the previous build could not be reordered at all:
+     • ← →  buttons          — always work, on every device
+     • position number box   — send a photo straight to any slot
+     • press-and-drag handle — Pointer Events, so mouse AND touch both work
+   ═══════════════════════════════════════════════════════════════════════════ */
+let galBusy = false;
+
+/* Persist positions. Chunked so a large gallery can never breach Firestore's
+   500-writes-per-batch limit. */
+function commitOrder(ids) {
+  let p = Promise.resolve();
+  for (let i = 0; i < ids.length; i += 400) {
+    const chunk = ids.slice(i, i + 400), base = i;
+    p = p.then(() => {
+      const batch = writeBatch(db);
+      chunk.forEach((id, k) => batch.update(doc(db, "gallery", id), { order: base + k }));
+      return batch.commit();
+    });
+  }
+  return p;
+}
+async function applyOrder(ids) {
+  if (galBusy) return;
+  galBusy = true;
+  const map = {}; gallery.forEach(g => { map[g.id] = g; });
+  const prev = gallery;
+  gallery = ids.map((id, i) => Object.assign({}, map[id], { order: i })).filter(Boolean);
+  renderers.gallery();                                   /* optimistic, instant */
+  try {
+    await commitOrder(ids);
+    logAudit("gallery.reorder", ids.length + " photos");
+    toast("අනුපිළිවෙළ සුරැකිණි ✓ — පොදු අඩවියට යෙදිණි", "ok");
+  } catch (e) {
+    gallery = prev; renderers.gallery();
+    toast("අනුපිළිවෙළ සුරැකීම අසාර්ථකයි", "err");
+  }
+  galBusy = false;
+}
+function moveTo(id, to) {
+  const ids = gallery.map(g => g.id);
+  const from = ids.indexOf(id);
+  if (from < 0) return;
+  to = Math.max(0, Math.min(ids.length - 1, to));
+  if (to === from) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  applyOrder(ids);
+}
+
 renderers.gallery = function () {
   const n = gallery.length;
   const slot = n === 9 ? '<p class="slot-note ok">✓ Moments of Love සඳහා ඡායාරූප 9ම සම්පූර්ණයි.</p>'
     : n < 9 ? '<p class="slot-note warn">තව ' + (9 - n) + 'ක් එක් කළොත් Moments of Love සම්පූර්ණ වේ (දැන් ' + n + '/9).</p>'
-    : '<p class="slot-note warn">ඡායාරූප ' + n + 'ක් ඇත — පළමු 9 Moments of Love ලෙස දිස් වේ.</p>';
+    : '<p class="slot-note warn">ඡායාරූප ' + n + 'ක් ඇත — <b>මුල් 9</b> Moments of Love ලෙස දිස් වේ.</p>';
 
   $("#p-gallery").innerHTML =
-    card('<h3>ඡායාරූප එක් කරන්න</h3><p class="hint">ගොනු මෙතැනට ඇද දමන්න (drag & drop) හෝ click කරන්න · කිහිපයක් එකවර</p>' +
+    card('<h3>ඡායාරූප එක් කරන්න</h3><p class="hint">ගොනු මෙතැනට ඇද දමන්න හෝ click කරන්න · කිහිපයක් එකවර</p>' +
       '<label class="drop" id="galDrop"><b>ඡායාරූප තෝරන්න හෝ මෙතැනට ඇද දමන්න</b>' +
       '<i>JPG / PNG / WEBP · ස්වයංක්‍රීයව optimise වී Cloudinary වෙත යයි</i>' +
       '<input type="file" id="galFile" accept="image/*" multiple hidden></label>' +
       '<div class="prog" id="galProg" hidden><i></i></div>' + slot) +
-    card('<div class="card-head"><h3>එකතුව (' + n + ')</h3><span class="faint" style="font-size:.8rem">අනුපිළිවෙළ වෙනස් කිරීමට ඡායාරූප ඇද දමන්න</span></div>' +
+    card('<div class="card-head"><h3>අනුපිළිවෙළ (' + n + ')</h3>' +
+      '<span class="faint" style="font-size:.78rem">මෙහි අනුපිළිවෙළම පොදු අඩවියේ දිස් වේ</span></div>' +
+      '<p class="hint">⇕ අල්ලාගෙන ඇදගෙන යන්න · <b>←&nbsp;→</b> එකින් එක ගෙනයන්න · අංකය වෙනස් කර ඕනෑම තැනකට යවන්න</p>' +
       (n ? '<div class="gal" id="galGrid">' + gallery.map((g, i) =>
-        '<div class="gcell" draggable="true" data-id="' + esc(g.id) + '" data-i="' + i + '">' +
+        '<div class="gcell' + (i === 8 && n > 9 ? " cut" : "") + '" data-id="' + esc(g.id) + '" data-i="' + i + '">' +
           '<span class="gnum">' + (i + 1) + '</span>' +
-          '<button class="btn xs bad del" data-del="' + esc(g.id) + '" type="button">✕</button>' +
-          '<img src="' + esc(thumb(g.url)) + '" alt="' + esc(g.caption || "") + '" loading="lazy" decoding="async">' +
+          '<button class="gx" data-del="' + esc(g.id) + '" type="button" title="මකන්න" aria-label="මකන්න">✕</button>' +
+          '<span class="g-handle" data-h="' + esc(g.id) + '" title="ඇදගෙන යන්න">⇕</span>' +
+          '<img src="' + esc(thumb(g.url)) + '" alt="' + esc(g.caption || "") + '" loading="lazy" decoding="async" draggable="false">' +
+          '<div class="gmove">' +
+            '<button class="gbtn g-mv" data-id="' + esc(g.id) + '" data-dir="l" type="button"' + (i === 0 ? " disabled" : "") + ' aria-label="වමට">←</button>' +
+            '<input class="g-pos num" type="number" min="1" max="' + n + '" value="' + (i + 1) + '" data-id="' + esc(g.id) + '" aria-label="ස්ථානය">' +
+            '<button class="gbtn g-mv" data-id="' + esc(g.id) + '" data-dir="r" type="button"' + (i === n - 1 ? " disabled" : "") + ' aria-label="දකුණට">→</button>' +
+          '</div>' +
           '<div class="gbar"><input class="mini cap" data-cap="' + esc(g.id) + '" value="' + esc(g.caption || "") + '" placeholder="සිරැසිය"></div>' +
         '</div>').join("") + '</div>'
         : '<div class="empty">තවම ඡායාරූප නැත.</div>'));
 
+  /* ── upload ── */
   const drop = $("#galDrop"), file = $("#galFile"), prog = $("#galProg"), bar = $("i", prog);
   const upload = async (files) => {
     const arr = Array.from(files || []).filter(f => /^image\//.test(f.type || ""));
@@ -1282,37 +1345,87 @@ renderers.gallery = function () {
   ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove("over")));
   drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files) upload(e.dataTransfer.files); });
 
+  /* ── delete / caption ── */
   $$("[data-del]", $("#p-gallery")).forEach(b => b.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!await confimDel()) return;
-    try { await delGallery(b.dataset.del); toast("මකා දැමිණි", "ok"); } catch (_) { toast("දෝෂයකි", "err"); }
+    if (!await confirmBox("මෙම ඡායාරූපය එකතුවෙන් මකන්නද?")) return;
+    try {
+      await delGallery(b.dataset.del);
+      const ids = gallery.map(g => g.id).filter(id => id !== b.dataset.del);
+      if (ids.length) commitOrder(ids).catch(() => {});     /* keep positions 1..n tidy */
+      toast("මකා දැමිණි", "ok");
+    } catch (_) { toast("දෝෂයකි", "err"); }
   });
-  function confimDel() { return confirmBox("මෙම ඡායාරූපය එකතුවෙන් මකන්නද?"); }
   $$("[data-cap]", $("#p-gallery")).forEach(inp => {
-    inp.onclick = (e) => e.stopPropagation();
-    inp.onchange = () => updGallery(inp.dataset.cap, { caption: inp.value.trim() }).then(() => toast("සිරැසිය සුරැකිණි", "ok")).catch(() => toast("දෝෂයකි", "err"));
+    inp.onpointerdown = (e) => e.stopPropagation();
+    inp.onchange = () => updGallery(inp.dataset.cap, { caption: inp.value.trim() })
+      .then(() => toast("සිරැසිය සුරැකිණි", "ok")).catch(() => toast("දෝෂයකි", "err"));
   });
 
-  /* drag-to-reorder → writes `order`, which the public site sorts by */
-  let dragId = null;
-  $$(".gcell", $("#p-gallery")).forEach(cell => {
-    cell.addEventListener("dragstart", (e) => { dragId = cell.dataset.id; cell.classList.add("drag"); if (e.dataTransfer) e.dataTransfer.effectAllowed = "move"; });
-    cell.addEventListener("dragend", () => { dragId = null; cell.classList.remove("drag"); $$(".gcell").forEach(c => c.classList.remove("dragover")); });
-    cell.addEventListener("dragover", (e) => { e.preventDefault(); if (dragId && dragId !== cell.dataset.id) cell.classList.add("dragover"); });
-    cell.addEventListener("dragleave", () => cell.classList.remove("dragover"));
-    cell.addEventListener("drop", async (e) => {
-      e.preventDefault(); cell.classList.remove("dragover");
-      if (!dragId || dragId === cell.dataset.id) return;
-      const from = gallery.findIndex(g => g.id === dragId);
-      const to = gallery.findIndex(g => g.id === cell.dataset.id);
-      if (from < 0 || to < 0) return;
-      const arr = gallery.slice(); const [m] = arr.splice(from, 1); arr.splice(to, 0, m);
-      try {
-        const batch = writeBatch(db);
-        arr.forEach((g, i) => batch.update(doc(db, "gallery", g.id), { order: i }));
-        await batch.commit();
-        toast("අනුපිළිවෙළ යාවත්කාලීන විය ✓", "ok");
-      } catch (_) { toast("අනුපිළිවෙළ සුරැකීම අසාර්ථකයි", "err"); }
+  /* ── ← → buttons ── */
+  $$(".g-mv", $("#p-gallery")).forEach(b => b.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const ids = gallery.map(g => g.id);
+    moveTo(b.dataset.id, ids.indexOf(b.dataset.id) + (b.dataset.dir === "l" ? -1 : 1));
+  });
+
+  /* ── exact position box ── */
+  $$(".g-pos", $("#p-gallery")).forEach(inp => {
+    inp.onpointerdown = (e) => e.stopPropagation();
+    inp.onchange = () => moveTo(inp.dataset.id, clampInt(inp.value, 1, gallery.length) - 1);
+  });
+
+  /* ── press-and-drag (Pointer Events → mouse AND touch) ── */
+  const grid = $("#galGrid");
+  if (grid) $$(".g-handle", grid).forEach(handle => {
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const cell = handle.closest(".gcell"); if (!cell) return;
+      const srcId = cell.dataset.id;
+      cell.classList.add("drag");
+      /* Listen on WINDOW, not on the handle: the pointer leaves the handle almost
+         immediately, and relying on pointer capture is unreliable across engines.
+         `touch-action:none` on the handle stops the browser stealing the gesture. */
+      /* Clamp into the viewport: elementFromPoint returns null for any point
+         outside it, which silently killed drops near the edges. */
+      const cellAt = (x, y) => {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cx = Math.max(1, Math.min(vw - 2, x));
+        const cy = Math.max(1, Math.min(vh - 2, y));
+        const el = document.elementFromPoint(cx, cy);
+        return (el && el.closest) ? el.closest(".gcell") : null;
+      };
+      const clear = () => $$(".gcell", grid).forEach(c => c.classList.remove("dragover"));
+      let lastX = e.clientX, lastY = e.clientY;
+      /* Auto-scroll while dragging near an edge, so photos can be moved across a
+         gallery taller than the screen — essential on a phone. */
+      const EDGE = 72;
+      let scrollTimer = setInterval(() => {
+        const vh = window.innerHeight;
+        if (lastY < EDGE) window.scrollBy(0, -18);
+        else if (lastY > vh - EDGE) window.scrollBy(0, 18);
+      }, 60);
+      const move = (ev) => {
+        if (ev.cancelable) ev.preventDefault();
+        lastX = ev.clientX; lastY = ev.clientY;
+        const over = cellAt(lastX, lastY);
+        clear();
+        if (over && over !== cell) over.classList.add("dragover");
+      };
+      const up = (ev) => {
+        clearInterval(scrollTimer);
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        cell.classList.remove("drag"); clear();
+        const x = (ev && ev.clientX != null) ? ev.clientX : lastX;
+        const y = (ev && ev.clientY != null) ? ev.clientY : lastY;
+        const over = cellAt(x, y);
+        if (over && over !== cell) moveTo(srcId, gallery.map(g => g.id).indexOf(over.dataset.id));
+      };
+      window.addEventListener("pointermove", move, { passive: false });
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     });
   });
 };
@@ -1454,7 +1567,7 @@ renderers.theme = function () {
 };
 
 /* ════════════════════════ 10 · SEATING PLANNER ═════════════════════════════ */
-let extraTables = [];
+let extraTables = [], seatPick = null;
 renderers.seating = function () {
   const C = effGuests().filter(g => g.status === "confirmed");
   const pool = C.filter(g => !g.tableNumber);
@@ -1528,6 +1641,34 @@ renderers.seating = function () {
       if (gid) assign(gid, +tc.dataset.table);
     });
   });
+  /* ── tap-to-assign: touch screens cannot use HTML5 drag at all ──
+     tap a guest → tap a table. Tap the pool to un-assign. */
+  $$(".seat-chip", $("#p-seating")).forEach(ch => {
+    ch.addEventListener("click", (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains("x")) return;
+      const was = ch.classList.contains("picked");
+      $$(".seat-chip", $("#p-seating")).forEach(c => c.classList.remove("picked"));
+      if (was) { seatPick = null; return; }
+      ch.classList.add("picked"); seatPick = ch.dataset.gid;
+      toast("දැන් මේසයක් තට්ටු කරන්න (ඉවත් කිරීමට ලැයිස්තුව)", "warn");
+    });
+  });
+  const clearPick = () => { seatPick = null; $$(".seat-chip", $("#p-seating")).forEach(c => c.classList.remove("picked")); };
+  $$(".table-card", $("#p-seating")).forEach(tc => {
+    tc.addEventListener("click", (e) => {
+      if (e.target.closest && e.target.closest(".seat-chip")) return;
+      if (e.target.closest && e.target.closest(".t-clr")) return;
+      if (!seatPick) return;
+      const gid = seatPick; clearPick(); assign(gid, +tc.dataset.table);
+    });
+  });
+  const poolTap = $("#seatPool");
+  if (poolTap) poolTap.addEventListener("click", (e) => {
+    if (e.target.closest && e.target.closest(".seat-chip")) return;
+    if (!seatPick) return;
+    const gid = seatPick; clearPick(); assign(gid, null);
+  });
+
   const poolEl = $("#seatPool");
   if (poolEl) {
     poolEl.addEventListener("dragover", (e) => e.preventDefault());
