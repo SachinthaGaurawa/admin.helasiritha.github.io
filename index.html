@@ -36,7 +36,7 @@
   };
 </script>
 <!-- Loaded AFTER Tailwind so the bespoke luxury layer always wins -->
-<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -56,6 +56,20 @@
     </button>
 
     <p class="login-err" id="loginErr" role="alert" aria-live="assertive"></p>
+    <div class="login-hint" id="loginHint" hidden></div>
+
+    <details class="login-diag" id="loginDiag">
+      <summary>වෙනත් ක්‍රම හා තාක්ෂණික විස්තර</summary>
+      <div class="diag-body">
+        <button class="btn sm ghost" id="btnRedirect" type="button">Redirect ක්‍රමයෙන් පිවිසෙන්න</button>
+        <label class="diag-toggle">
+          <input type="checkbox" id="soAuth">
+          <span>Same-origin auth මාදිලිය <i>(Safari වල third-party storage අවහිර නම්)</i></span>
+        </label>
+        <pre id="diagOut" aria-label="තාක්ෂණික විස්තර"></pre>
+        <button class="btn sm ghost" id="copyDiag" type="button">විස්තර copy කරන්න</button>
+      </div>
+    </details>
 
     <p class="lock-note">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
@@ -129,6 +143,6 @@
   </div>
 </noscript>
 
-<script type="module" src="admin.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
