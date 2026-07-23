@@ -21,9 +21,29 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 /* ── configuration (public web config — safety comes from Auth + Rules) ───── */
+/* ── AUTH DOMAIN ───────────────────────────────────────────────────────────────
+   Firebase serves its OAuth handler from `authDomain`. When that domain differs
+   from the domain the panel is served on, `signInWithRedirect` needs THIRD-PARTY
+   storage access — which iOS Safari (ITP), Firefox (ETP) and Chrome with
+   third-party cookies disabled all refuse. That is why redirect sign-in bounced
+   straight back to the login screen. The panel therefore signs in with a POPUP
+   on every device (Firebase's own recommendation for this exact situation).
+
+   OPTIONAL, for absolute coverage (even inside embedded browsers): serve the
+   handler from THIS domain and flip SAME_ORIGIN_AUTH to true.
+     1. vercel.json already proxies  /__/auth/*  →  helasiritha-official.firebaseapp.com
+     2. Firebase Console → Authentication → Settings → Authorized domains
+          add:  admin-helasiritha.vercel.app
+     3. Google Cloud Console → APIs & Services → Credentials → your OAuth client
+          Authorized redirect URIs, add:
+          https://admin-helasiritha.vercel.app/__/auth/handler
+   Only then set SAME_ORIGIN_AUTH = true.                                      */
+const SAME_ORIGIN_AUTH = false;
+const AUTH_DOMAIN = SAME_ORIGIN_AUTH ? window.location.host : "helasiritha-official.firebaseapp.com";
+
 const FB = {
   apiKey: "AIzaSyCC18zyof_ORDkKwxAMJK4G3Atu2AkWodM",
-  authDomain: "helasiritha-official.firebaseapp.com",
+  authDomain: AUTH_DOMAIN,
   projectId: "helasiritha-official",
   storageBucket: "helasiritha-official.firebasestorage.app",
   messagingSenderId: "993883662089",
@@ -158,6 +178,7 @@ let agenda    = AGENDA_DEFAULT.slice();
 let theme     = Object.assign({}, THEME_DEFAULT);
 let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [];
 let visitsCapped = false, signMode = "unknown";
+let sessionStart = Date.now(), lastActivity = Date.now();
 let rsvpMap = {};
 let current = "dashboard";
 let subsStarted = false;
@@ -198,59 +219,175 @@ function authMsg(code) {
     "auth/cancelled-popup-request": "පිවිසුම් උත්සාහය අවලංගු විය.",
     "auth/network-request-failed": "අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.",
     "auth/too-many-requests": "උත්සාහයන් වැඩියි. මඳක් පසුව නැවත උත්සාහ කරන්න.",
-    "auth/unauthorized-domain": "මෙම වසමට Firebase Auth අවසර දී නොමැත.",
-    "auth/operation-not-supported-in-this-environment": "මෙම බ්‍රවුසරයේ මෙය සහාය නොදක්වයි."
+    "auth/unauthorized-domain": "මෙම වසමට Firebase Auth අවසර දී නොමැත — Firebase Console → Authentication → Settings → Authorized domains වලට මෙම වසම එකතු කරන්න.",
+    "auth/operation-not-supported-in-this-environment": "මෙම බ්‍රවුසරයේ මෙය සහාය නොදක්වයි.",
+    "auth/web-storage-unsupported": "බ්‍රවුසරයේ ගබඩාව අවහිර කර ඇත. Private/Incognito මාදිලිය හෝ cookie අවහිර කිරීම ක්‍රියාවිරහිත කරන්න.",
+    "auth/redirect-blocked": "බ්‍රවුසරය තෙවන පාර්ශව ගබඩාවට ඉඩ නොදෙන නිසා යොමු පිවිසුම සම්පූර්ණ නොවිය. පහත බොත්තමෙන් නැවත උත්සාහ කරන්න — දැන් පිවිසුම් කවුළුව (popup) භාවිතා වේ.",
+    "auth/inapp-browser": "මෙම යෙදුම තුළ ඇති බ්‍රවුසරයේ Google පිවිසුමට ඉඩ නොදේ. කරුණාකර Safari හෝ Chrome වලින් විවෘත කරන්න.",
+    "auth/popup-unsupported": "මෙම බ්‍රවුසරය පිවිසුම් කවුළුවට ඉඩ නොදේ. Safari හෝ Chrome වලින් විවෘත කරන්න."
   })[code] || "පිවිසීම අසාර්ථකයි. නැවත උත්සාහ කරන්න.";
 }
 const isAdminEmail = (e) => !!e && String(e).trim().toLowerCase() === ADMIN_EMAIL;
-const isCoarse = () => (typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent || ""))
-  || (window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+
+/* ── environment detection ───────────────────────────────────────────────────
+   Embedded in-app browsers (Facebook, Instagram, TikTok, WeChat, LinkedIn …)
+   can never complete Google sign-in: Google itself rejects OAuth inside a
+   webview ("disallowed_useragent") and popups are blocked as well. The only
+   correct behaviour there is to send the person to a real browser.           */
+const UA = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+const IS_INAPP = /FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|WeChat|TikTok|Musical_?ly|Snapchat|Pinterest|LinkedInApp|OKApp|GSA\//i.test(UA);
 
 function provider() {
   const p = new GoogleAuthProvider();
   p.setCustomParameters({ login_hint: ADMIN_EMAIL, prompt: "select_account" });
   return p;
 }
+
+/* ── login-screen UI state ─────────────────────────────────────────────────── */
+let gsiHTML = null;
+function setBusy(on, label) {
+  const b = $("#googleBtn"); if (!b) return;
+  if (gsiHTML === null) gsiHTML = b.innerHTML;
+  b.disabled = !!on;
+  if (on) b.textContent = label || "පිවිසෙමින්…"; else b.innerHTML = gsiHTML;
+}
 function loginError(msg) {
   const el = $("#loginErr"); if (!el) return;
-  el.textContent = msg; el.classList.remove("show");
-  void el.offsetWidth; el.classList.add("show");
+  el.textContent = msg || ""; el.classList.remove("show");
+  if (msg) { void el.offsetWidth; el.classList.add("show"); }
 }
-/* Reject non-authorised accounts immediately, before any data is touched. */
+function loginHint(html) {
+  let el = $("#loginHint");
+  if (!el) {
+    const err = $("#loginErr"); if (!err || !err.parentNode) return;
+    el = document.createElement("div"); el.id = "loginHint"; el.className = "login-hint";
+    err.parentNode.insertBefore(el, err.nextSibling);
+  }
+  el.innerHTML = html || ""; el.hidden = !html;
+}
+function offerRetry() {
+  loginHint('<button class="btn sm primary" id="retryLogin" type="button">නැවත උත්සාහ කරන්න</button>');
+  const r = $("#retryLogin"); if (r) r.onclick = doGoogleLogin;
+}
+function showInAppWarning() {
+  loginError(authMsg("auth/inapp-browser"));
+  loginHint('<button class="btn sm ghost" id="copyUrl" type="button">සබැඳිය copy කරන්න</button>');
+  const c = $("#copyUrl");
+  if (c) c.onclick = async () => {
+    try { await navigator.clipboard.writeText(location.href); toast("සබැඳිය copy විය — Safari/Chrome වල අලවන්න ✓", "ok"); }
+    catch (_) { toast("සබැඳිය අතින් copy කරන්න", "warn"); }
+  };
+}
+
+/* Reject non-authorised accounts immediately, before any data is touched.
+   Both the popup result and the auth listener can detect the same intruder, so
+   the rejection is de-duplicated — one sign-out, one message. */
+let rejecting = false, enteredAt = 0;
 async function rejectIntruder(reason) {
+  if (rejecting) return; rejecting = true;
   try { await signOut(auth); } catch (_) {}
   $("#app").hidden = true; $("#login").hidden = false;
+  setBusy(false); loginHint("");
   loginError(authMsg(reason));
+  setTimeout(() => { rejecting = false; }, 1500);
 }
-async function doGoogleLogin() {
-  const b = $("#googleBtn"); const label = b.innerHTML;
-  loginError(""); b.disabled = true; b.textContent = "පිවිසෙමින්…";
-  try {
-    if (isCoarse()) { await signInWithRedirect(auth, provider()); return; }
-    const res = await signInWithPopup(auth, provider());
-    if (!isAdminEmail(res.user && res.user.email)) { await rejectIntruder("auth/not-admin"); }
-  } catch (e) {
-    const code = e && e.code;
-    if (["auth/popup-blocked", "auth/popup-closed-by-user", "auth/cancelled-popup-request",
-         "auth/operation-not-supported-in-this-environment"].includes(code)) {
-      try { await signInWithRedirect(auth, provider()); return; } catch (e2) { loginError(authMsg(e2 && e2.code)); }
-    } else loginError(authMsg(code));
-  }
-  b.disabled = false; b.innerHTML = label;
-}
-/* Handle the mobile redirect hand-back */
-getRedirectResult(auth).then((res) => {
-  if (res && res.user && !isAdminEmail(res.user.email)) rejectIntruder("auth/not-admin");
-}).catch((e) => { if (e && e.code) loginError(authMsg(e.code)); });
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) { $("#app").hidden = true; $("#login").hidden = false; return; }
+/* Single, idempotent entry point into the panel. Reachable from THREE
+   independent signals — popup result, redirect result, auth listener — so no
+   single browser quirk can leave the administrator stranded on the gate. */
+function enterPanel(user) {
+  if (!user) return;
   if (!isAdminEmail(user.email)) { rejectIntruder("auth/not-admin"); return; }
   if (user.emailVerified === false) { rejectIntruder("auth/unverified"); return; }
+  setBusy(false); loginHint(""); loginError("");
   $("#login").hidden = true; $("#app").hidden = false;
-  $("#whoEmail").textContent = user.email;
+  $("#whoEmail").textContent = user.email || "";
+  enteredAt = Date.now();
+  sessionStart = Date.now(); lastActivity = Date.now();
   if (!subsStarted) { subsStarted = true; startSubscriptions(); buildNav(); }
   go(current);
+}
+
+/* ── SIGN IN — popup on every device, redirect only as a genuine fallback ──── */
+const REDIRECT_PENDING = "hs_auth_redirect_pending";
+const POPUP_FALLBACK = [
+  "auth/popup-blocked", "auth/operation-not-supported-in-this-environment",
+  "auth/web-storage-unsupported", "auth/internal-error", "auth/timeout"
+];
+let redirectResolving = false;
+
+async function startRedirect() {
+  try { sessionStorage.setItem(REDIRECT_PENDING, "1"); } catch (_) {}
+  try { await signInWithRedirect(auth, provider()); return true; }
+  catch (e) {
+    try { sessionStorage.removeItem(REDIRECT_PENDING); } catch (_) {}
+    loginError(authMsg(e && e.code)); offerRetry(); return false;
+  }
+}
+
+async function doGoogleLogin() {
+  loginError(""); loginHint("");
+  if (IS_INAPP) { showInAppWarning(); return; }
+  setBusy(true);
+  try {
+    /* The popup is opened inside this click, so no browser blocks it. */
+    const res = await signInWithPopup(auth, provider());
+    enterPanel(res && res.user);
+    return;
+  } catch (e) {
+    const code = (e && e.code) || "";
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+      setBusy(false); loginError(authMsg(code)); offerRetry(); return;
+    }
+    if (POPUP_FALLBACK.includes(code)) {
+      setBusy(true, "යොමු කරමින්…");
+      loginHint("පිවිසුම් කවුළුව අවහිර විය — යොමු කිරීමෙන් උත්සාහ කරමින්…");
+      if (await startRedirect()) return;   /* page navigates away */
+    } else {
+      loginError(authMsg(code)); offerRetry();
+    }
+  }
+  setBusy(false);
+}
+
+/* ── returning from a redirect ───────────────────────────────────────────────
+   If the flag is set we came back from Google, so hold the "signing in" state
+   instead of flashing the login card. A null result means the browser refused
+   the cross-site storage the redirect flow needs — say so plainly and offer the
+   popup, rather than silently dumping the person back at the start.          */
+(function handleRedirectReturn() {
+  let pending = false;
+  try { pending = sessionStorage.getItem(REDIRECT_PENDING) === "1"; } catch (_) {}
+  redirectResolving = pending;
+  if (pending) setBusy(true, "පිවිසුම සම්පූර්ණ කරමින්…");
+
+  getRedirectResult(auth).then((res) => {
+    try { sessionStorage.removeItem(REDIRECT_PENDING); } catch (_) {}
+    redirectResolving = false;
+    if (res && res.user) { enterPanel(res.user); return; }
+    if (pending) { setBusy(false); loginError(authMsg("auth/redirect-blocked")); offerRetry(); }
+  }).catch((e) => {
+    try { sessionStorage.removeItem(REDIRECT_PENDING); } catch (_) {}
+    redirectResolving = false; setBusy(false);
+    loginError(authMsg(e && e.code)); offerRetry();
+  });
+})();
+
+if (IS_INAPP) showInAppWarning();
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    /* Firebase emits an initial "signed out" event on every load. If a popup or
+       redirect result has just brought the administrator in, that event is stale
+       and must NOT eject them — otherwise sign-in appears to bounce back to the
+       gate. A real sign-out always arrives well after entry and is honoured. */
+    if (enteredAt && Date.now() - enteredAt < 4000) return;
+    enteredAt = 0;
+    $("#app").hidden = true; $("#login").hidden = false;
+    if (!redirectResolving) setBusy(false);
+    return;
+  }
+  enterPanel(user);
 });
 
 /* ════════════════════════ REAL-TIME SUBSCRIPTIONS ══════════════════════════ */
@@ -1332,7 +1469,12 @@ renderers.seating = function () {
 
 /* ════════════════════════ BOOT WIRING ══════════════════════════════════════ */
 $("#googleBtn").addEventListener("click", doGoogleLogin);
-$("#logoutBtn").addEventListener("click", async () => { await signOut(auth).catch(() => {}); toast("පිටවිය.", "ok"); });
+$("#logoutBtn").addEventListener("click", async () => {
+  enteredAt = 0;                                  /* deliberate exit — honour it at once */
+  await signOut(auth).catch(() => {});
+  $("#app").hidden = true; $("#login").hidden = false; setBusy(false);
+  toast("පිටවිය.", "ok");
+});
 $("#menuBtn").addEventListener("click", openDrawer);
 $("#scrim").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
@@ -1526,7 +1668,6 @@ renderers.qr = function () {
 };
 
 /* ════════════════════ v2 · SECURITY & AUDIT ════════════════════ */
-let sessionStart = Date.now(), lastActivity = Date.now();
 renderers.security = function () {
   const u = auth.currentUser;
   const https = location.protocol === "https:" || location.hostname === "localhost";
@@ -1565,7 +1706,10 @@ renderers.security = function () {
             esc(a.ts && a.ts.seconds ? new Date(a.ts.seconds * 1000).toLocaleString("si-LK") : "") + '</div></div></div>').join("") + '</div>'
         : '<div class="empty">තවම සටහන් නැත. (rules deploy කළ පසු ක්‍රියාත්මක වේ)</div>'));
 
-  $("#secOut").onclick = async () => { await signOut(auth).catch(() => {}); };
+  $("#secOut").onclick = async () => {
+    enteredAt = 0; await signOut(auth).catch(() => {});
+    $("#app").hidden = true; $("#login").hidden = false; setBusy(false);
+  };
   $("#secBackup").onclick = () => {
     const payload = {
       exportedAt: new Date().toISOString(), by: (u && u.email) || "",
@@ -1587,8 +1731,9 @@ renderers.security = function () {
 setInterval(() => {
   if (!auth.currentUser) return;
   if (Date.now() - lastActivity > IDLE_LOGOUT_MS) {
-    lastActivity = Date.now();
+    lastActivity = Date.now(); enteredAt = 0;
     signOut(auth).catch(() => {});
+    $("#app").hidden = true; $("#login").hidden = false;
     toast("අක්‍රීයතාවය නිසා ස්වයංක්‍රීයව පිටවිය", "warn");
   }
 }, 30000);

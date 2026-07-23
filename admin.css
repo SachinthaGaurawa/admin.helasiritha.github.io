@@ -614,3 +614,7 @@ input[type=checkbox]{ accent-color:#D4AF6A; width:16px; height:16px; cursor:poin
 .sec-note svg{ width:17px; height:17px; flex:0 0 auto; margin-top:2px; }
 .sec-note b{ color:#fff; }
 .sec-note.ok b{ color:#EAFBF2; }
+
+/* ── login helper line (retry / open-in-browser guidance) ── */
+.login-hint{ margin-top:12px; font-size:.82rem; color:var(--mut); line-height:1.6; }
+.login-hint .btn{ margin-top:8px; }
