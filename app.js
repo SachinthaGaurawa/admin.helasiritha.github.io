@@ -116,16 +116,21 @@ const CONTENT_DEFAULT = {
   brideName: "කෞශානි", groomName: "ගෞරව",
   brideNameEn: "Kaushani", groomNameEn: "Gaurawa",
   brideNameTa: "கௌஷானி", groomNameTa: "கௌரவ",
-  bridePreLine: "ශ්‍රීමත් හා ශ්‍රීමතී කුලසූරියගේ දම්පතියන්ගේ ආදරණීය දියණිය,",
-  groomPreLine: "ශ්‍රීමත් හා ශ්‍රීමතී කප්පෙටිපොල වීරකෝන් මුදියන්සේලාගේ දම්පතියන්ගේ ආදරණීය පුත්‍රයා,",
-  dateISO: "2028-01-12T09:15:00+05:30",
+  brideFather: "", brideFatherEn: "", brideFatherTa: "",
+  groomFather: "", groomFatherEn: "", groomFatherTa: "",
+  bridePreLine: "මහත්මා සහ එම මැතිනියගේ ආදරණීය දියණිය වූ,",
+  bridePreLineEn: "the beloved daughter of Mr. & Mrs.", bridePreLineTa: "அவர்களின் அன்பு மகள்,",
+  groomPreLine: "මහත්මා සහ එම මැතිනියගේ ආදරණීය පුත් වූ,",
+  groomPreLineEn: "the beloved son of Mr. & Mrs.", groomPreLineTa: "அவர்களின் அன்பு மகன்,",
+  dateISO: "2028-01-12T09:28:00+05:30",
   venue: "The Epitome Hotel",
   venueCity: "කුරුණෑගල", venueCityEn: "Kurunegala", venueCityTa: "குருநாகல்",
   venueMapUrl: "https://www.google.com/maps/search/?api=1&query=The+Epitome+Hotel+Kurunegala",
-  ceremonyTime: "පෙ.ව. 9.15 සිට", ceremonyTimeEn: "9.15 a.m. onwards", ceremonyTimeTa: "மு.ப. 9.15 மணி முதல்",
-  poruwaTime: "පෙ.ව. 9.15",
+  ceremonyTime: "පෙ.ව. 09.00 සිට සවස 04.00 දක්වා", ceremonyTimeEn: "9.15 a.m. onwards", ceremonyTimeTa: "மு.ப. 9.15 மணி முதல்",
+  poruwaTime: "පෙ.ව. 09.28",
   heroImageUrl: "",
-  loveNote: "", loveSign: "කෞශානි & ගෞරව",
+  loveNote: "ආදරයෙන් හා කෘතඥතාවයෙන් පිරුණු හදවත් සමඟ, අපගේ ජීවිතයේ මෙම සුන්දර පරිච්ඡේදය ඔබ සමඟ සැමරීමට ලැබීම ගැන අපි ඉතා සතුටු වෙමු.",
+  loveSign: "කෞශානි & ගෞරව",
   phone: "", whatsapp: "", ambientAudioUrl: "",
   rsvpOpen: true,
   show: { countdown: true, agenda: true, gallery: true, lovenote: true, lamp: true, blessings: true, rsvp: true }
@@ -817,8 +822,12 @@ renderers.details = function () {
     card('<h3>මනාල යුවළ</h3><p class="hint">මනාලිය මුලින් · තුන් භාෂාවෙන්ම (පොදු පිටුව + සන්නස දෙකටම යෙදේ)</p>' +
       tri("brideName", "මනාලියගේ නම", c.brideName, c.brideNameEn, c.brideNameTa) +
       tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa) +
-      tri("brideParents", "මනාලියගේ දෙමාපිය පේළිය", c.bridePreLine, c.brideParentsEn || "", c.brideParentsTa || "", "textarea") +
-      tri("groomParents", "මනාලයාගේ දෙමාපිය පේළිය", c.groomPreLine, c.groomParentsEn || "", c.groomParentsTa || "", "textarea")) +
+      '<p class="hint" style="padding-inline-start:13px">පියාගේ නම (මුලකුරු + වාසගම) සහ පසුව එන වාක්‍ය ඛණ්ඩය වෙන් වෙන්ව. ' +
+      'උදා: <b>ඩබ්ලිව්.පී.ජී. වික්‍රමසිංහ</b> + <b>මහත්මා සහ එම මැතිනියගේ ආදරණීය දියණිය වූ,</b></p>' +
+      tri("brideFather", "කෞශානිගේ පියාගේ නම (මුලකුරු + වාසගම)", c.brideFather || "", c.brideFatherEn || "", c.brideFatherTa || "") +
+      tri("brideParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.bridePreLine, c.bridePreLineEn || "", c.bridePreLineTa || "", "textarea") +
+      tri("groomFather", "ගෞරවගේ පියාගේ නම (මුලකුරු + වාසගම)", c.groomFather || "", c.groomFatherEn || "", c.groomFatherTa || "") +
+      tri("groomParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.groomPreLine, c.groomPreLineEn || "", c.groomPreLineTa || "", "textarea")) +
 
     card('<h3>දිනය · වේලාව · ස්ථානය</h3><p class="hint">දිනය තෝරන විට සිංහල/English/தமிழ் දින පෙළ ස්වයංක්‍රීයව සැකසේ</p>' +
       '<div class="grid2">' + fld("මංගල දිනය හා වේලාව", "f_date", toLocalInput(c.dateISO), "datetime-local") +
@@ -865,6 +874,11 @@ renderers.details = function () {
       brideNameEn: v("brideNameEn_"), groomNameEn: v("groomNameEn_"),
       brideNameTa: v("brideNameTa_"), groomNameTa: v("groomNameTa_"),
       bridePreLine: v("brideParentsSi_"), groomPreLine: v("groomParentsSi_"),
+      bridePreLineEn: v("brideParentsEn_"), bridePreLineTa: v("brideParentsTa_"),
+      groomPreLineEn: v("groomParentsEn_"), groomPreLineTa: v("groomParentsTa_"),
+      brideFather: v("brideFatherSi_"), brideFatherEn: v("brideFatherEn_"), brideFatherTa: v("brideFatherTa_"),
+      groomFather: v("groomFatherSi_"), groomFatherEn: v("groomFatherEn_"), groomFatherTa: v("groomFatherTa_"),
+      brideFatherSi: v("brideFatherSi_"), groomFatherSi: v("groomFatherSi_"),
       dateISO: iso, poruwaTime: v("f_poruwaTime"),
       ceremonyTime: v("ceremonyTimeSi_"), ceremonyTimeEn: v("ceremonyTimeEn_"), ceremonyTimeTa: v("ceremonyTimeTa_"),
       venue: v("f_venue"), venueMapUrl: v("f_venueMapUrl"),
