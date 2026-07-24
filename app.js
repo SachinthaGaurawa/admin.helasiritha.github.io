@@ -84,6 +84,12 @@ function toast(msg, kind) {
   t.textContent = msg; t.className = "show " + (kind || "");
   clearTimeout(toastT); toastT = setTimeout(() => { t.className = ""; }, 2800);
 }
+/* Destructive actions ask twice — the second prompt states the exact count and
+   that the action is permanent. */
+async function confirmTwice(first, second, okLabel) {
+  if (!await confirmBox(first)) return false;
+  return await confirmBox(second, { ok: okLabel || "ඔව්, ස්ථිරවම", title: "අවසන් තහවුරුව" });
+}
 function confirmBox(message, opts = {}) {
   return new Promise((resolve) => {
     const m = $("#confirmModal"); const danger = opts.danger !== false;
@@ -469,18 +475,34 @@ onAuthStateChanged(auth, (user) => {
 });
 
 /* ════════════════════════ REAL-TIME SUBSCRIPTIONS ══════════════════════════ */
-function syncState(ok) {
+/* `navigator.onLine` only reports "attached to a network" — it stays true on a
+   router with no internet, which is why the badge lied. Firestore's snapshot
+   metadata is authoritative: `fromCache` means the server is unreachable and
+   `hasPendingWrites` means edits are queued but not yet acknowledged. */
+let lastMeta = null, hardOffline = false;
+function netState(meta) {
+  if (meta) { lastMeta = { fromCache: !!meta.fromCache, hasPendingWrites: !!meta.hasPendingWrites }; hardOffline = false; }
   const p = $("#syncPill"), t = $("#syncTxt"); if (!p) return;
-  p.classList.toggle("off", !ok); t.textContent = ok ? "සජීවී" : "විසන්ධි";
+  const navOff = (typeof navigator !== "undefined" && navigator.onLine === false);
+  const offline = navOff || hardOffline || (lastMeta && lastMeta.fromCache);
+  const pending = !offline && lastMeta && lastMeta.hasPendingWrites;
+  p.classList.toggle("off", !!offline);
+  p.classList.toggle("pend", !!pending);
+  t.textContent = offline ? "විසන්ධි" : pending ? "සමමුහුර්ත…" : "සජීවී";
+  p.title = offline ? "සේවාදායකයට ළඟා විය නොහැක — වෙනස්කම් උපාංගයේ රැඳී තිබේ"
+    : pending ? "වෙනස්කම් යවමින්…" : "Firestore සමඟ සජීවීව සම්බන්ධ";
 }
+function syncState(ok) { if (!ok) { hardOffline = true; } netState(); }
 function startSubscriptions() {
   const warn = (label) => (err) => { console.warn(label, err); syncState(false); };
 
-  onSnapshot(doc(db, "site", "content"), (s) => {
+  /* includeMetadataChanges → we are told the moment connectivity changes */
+  onSnapshot(doc(db, "site", "content"), { includeMetadataChanges: true }, (s) => {
     const d = s.exists() ? s.data() : {};
     content = Object.assign({}, CONTENT_DEFAULT, d);
     content.show = Object.assign({}, CONTENT_DEFAULT.show, d.show || {});
-    syncState(true); refresh("details"); refresh("visibility"); refresh("dashboard");
+    netState(s.metadata);
+    refresh("details"); refresh("visibility"); refresh("dashboard");
   }, warn("content"));
 
   onSnapshot(doc(db, "site", "agenda"), (s) => {
@@ -582,7 +604,14 @@ const withAudit = (promise, action, target) =>
 
 const saveContent = (patch) => withAudit(setDoc(doc(db, "site", "content"), Object.assign({}, patch, { updatedAt: Date.now() }), { merge: true }), "content.save", Object.keys(patch).slice(0, 6).join(","));
 const saveAgenda  = (items) => withAudit(setDoc(doc(db, "site", "agenda"), { items, updatedAt: Date.now() }, { merge: true }), "agenda.save", items.length + " items");
-const saveTheme   = (t)     => withAudit(setDoc(doc(db, "site", "theme"), Object.assign({}, t, { updatedAt: Date.now() }), { merge: true }), "theme.save", t.primary || "");
+function saveTheme(t, keepPrev) {
+  const payload = Object.assign({}, t, { updatedAt: Date.now() });
+  if (!keepPrev) {                     /* snapshot what we are replacing */
+    const prev = {}; THEME_FIELDS.forEach(([k]) => { prev[k] = theme[k]; });
+    payload.previous = prev;
+  }
+  return withAudit(setDoc(doc(db, "site", "theme"), payload, { merge: true }), "theme.save", t.primary || "");
+}
 const addGuest    = (o)     => withAudit(addDoc(collection(db, "guests"), Object.assign({ ts: serverTimestamp() }, o)), "guest.add", o.name);
 const updGuest    = (id, o) => updateDoc(doc(db, "guests", id), o);
 const delGuest    = (id)    => withAudit(deleteDoc(doc(db, "guests", id)), "guest.delete", id);
@@ -1266,7 +1295,8 @@ function readAgenda() {
      • position number box   — send a photo straight to any slot
      • press-and-drag handle — Pointer Events, so mouse AND touch both work
    ═══════════════════════════════════════════════════════════════════════════ */
-let galBusy = false;
+let galBusy = false, galPick = null;
+let qrUnlocked = false, qrSrc = "qr";
 
 /* Persist positions. Chunked so a large gallery can never breach Firestore's
    500-writes-per-batch limit. */
@@ -1325,10 +1355,13 @@ renderers.gallery = function () {
       '<span class="faint" style="font-size:.78rem">මෙහි අනුපිළිවෙළම පොදු අඩවියේ දිස් වේ</span></div>' +
       '<p class="hint">⇕ අල්ලාගෙන ඇදගෙන යන්න · <b>←&nbsp;→</b> එකින් එක ගෙනයන්න · අංකය වෙනස් කර ඕනෑම තැනකට යවන්න</p>' +
       (n ? '<div class="gal" id="galGrid">' + gallery.map((g, i) =>
-        '<div class="gcell' + (i === 8 && n > 9 ? " cut" : "") + '" data-id="' + esc(g.id) + '" data-i="' + i + '">' +
+        '<div class="gcell' + (i === 8 && n > 9 ? " cut" : "") + (galPick === g.id ? " picked" : "") +
+          (galPick && galPick !== g.id ? " target" : "") + '" data-id="' + esc(g.id) + '" data-i="' + i + '">' +
           '<span class="gnum">' + (i + 1) + '</span>' +
           '<button class="gx" data-del="' + esc(g.id) + '" type="button" title="මකන්න" aria-label="මකන්න">✕</button>' +
           '<span class="g-handle" data-h="' + esc(g.id) + '" title="ඇදගෙන යන්න">⇕</span>' +
+          '<button class="gpick" data-pick="' + esc(g.id) + '" type="button" title="ගෙනයන්න">' +
+            (galPick === g.id ? "✓" : "⇄") + '</button>' +
           '<img src="' + esc(thumb(g.url)) + '" alt="' + esc(g.caption || "") + '" loading="lazy" decoding="async" draggable="false">' +
           '<div class="gmove">' +
             '<button class="gbtn g-mv" data-id="' + esc(g.id) + '" data-dir="l" type="button"' + (i === 0 ? " disabled" : "") + ' aria-label="වමට">←</button>' +
@@ -1375,6 +1408,27 @@ renderers.gallery = function () {
     inp.onpointerdown = (e) => e.stopPropagation();
     inp.onchange = () => updGallery(inp.dataset.cap, { caption: inp.value.trim() })
       .then(() => toast("සිරැසිය සුරැකිණි", "ok")).catch(() => toast("දෝෂයකි", "err"));
+  });
+
+  /* ── tap-to-move: tap ⇄ on a photo, then tap where it should go.
+     Fully deterministic — no gesture recognition, so it cannot fail on a phone. ── */
+  $$("[data-pick]", $("#p-gallery")).forEach(b => b.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const id = b.dataset.pick;
+    if (galPick === id) { galPick = null; renderers.gallery(); toast("අවලංගු කෙරිණි", "warn"); return; }
+    galPick = id;
+    renderers.gallery();
+    toast("දැන් යවන තැනට ඇති ඡායාරූපය තට්ටු කරන්න", "warn");
+  });
+  if (galPick) $$(".gcell", $("#p-gallery")).forEach(cell => {
+    cell.addEventListener("click", (e) => {
+      if (e.target.closest && (e.target.closest("[data-pick]") || e.target.closest("[data-del]") ||
+          e.target.closest(".g-mv") || e.target.closest("input") || e.target.closest(".g-handle"))) return;
+      const from = galPick;
+      if (!from || cell.dataset.id === from) return;
+      galPick = null;
+      moveTo(from, gallery.map(g => g.id).indexOf(cell.dataset.id));
+    });
   });
 
   /* ── ← → buttons ── */
@@ -1529,8 +1583,12 @@ renderers.theme = function () {
         '<div class="ay">ශුභ මංගලම්</div><div class="nm">කෞශානි &amp; ගෞරව</div>' +
         '<div class="ln">ඔබගේ පැමිණීම අපගේ භාග්‍යයකි</div></div></div>' +
       '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
+        (theme.previous ? '<button class="btn sm bad" id="thUndo" type="button">↩ පෙර වර්ණ වලට හරවන්න</button>' : '') +
         '<button class="btn primary" id="thSave" type="button">වර්ණ සුරකින්න</button>' +
-        '<span class="saved" id="thSaved">✓ සුරැකිණි</span></div>');
+        '<span class="saved" id="thSaved">✓ සුරැකිණි</span></div>' +
+      (theme.previous ? '<p class="hint" style="padding:0;margin-top:8px">පෙර වර්ණ: ' +
+        THEME_FIELDS.map(([k]) => '<span class="sw-dot" style="background:' + esc(String(theme.previous[k] || "#000")) + '"></span>').join("") +
+        '</p>' : ''));
 
   const prev = $("#thPrev");
   const paint = () => {
@@ -1563,6 +1621,23 @@ renderers.theme = function () {
     paint();
   };
   paint();
+  if ($("#thUndo")) $("#thUndo").onclick = async () => {
+    const prev = theme.previous;
+    if (!prev) return;
+    const list = THEME_FIELDS.map(([k, label]) => label + ": " + (prev[k] || "?")).join(", ");
+    if (!await confirmTwice(
+      "පෙර වර්ණ තේමාවට හරවන්නද? (" + list + ")",
+      "තහවුරු කරන්න — වත්මන් වර්ණ ප්‍රතිස්ථාපනය වේ, පොදු අඩවියටද ක්ෂණිකව යෙදේ.",
+      "ඔව්, පෙර වර්ණ යොදන්න")) return;
+    const restore = {}; THEME_FIELDS.forEach(([k]) => { restore[k] = prev[k]; });
+    try {
+      /* swap: the palette we are leaving becomes the new "previous" */
+      await saveTheme(restore);
+      logAudit("theme.undo", restore.primary || "");
+      toast("පෙර වර්ණ තේමාව යෙදිණි ✓", "ok");
+    } catch (e) { toast("හැරවීම අසාර්ථකයි", "err"); }
+  };
+
   $("#thSave").onclick = async () => {
     const out = {}; let bad = false;
     THEME_FIELDS.forEach(([k]) => {
@@ -1753,8 +1828,9 @@ $("#logoutBtn").addEventListener("click", async () => {
 $("#menuBtn").addEventListener("click", openDrawer);
 $("#scrim").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
-window.addEventListener("online",  () => syncState(true));
-window.addEventListener("offline", () => syncState(false));
+window.addEventListener("online",  () => { hardOffline = false; netState(); });
+window.addEventListener("offline", () => netState());
+setInterval(() => netState(), 4000);          /* keeps the badge honest */
 
 } /* ── end wrong-repository guard ── */
 
@@ -1863,6 +1939,26 @@ function visitStats() {
   visits.forEach(v => { by[visitKind(v)]++; if (visitDay(v) === today) todayN++; if (visitSecs(v) >= cut7) last7++; });
   return { by, total: visits.length, today: todayN, last7 };
 }
+/* Permanently delete visit rows. Chunked to respect the 500-write batch limit. */
+async function resetVisits(kind) {
+  const target = kind ? visits.filter(v => visitKind(v) === kind) : visits.slice();
+  const label = kind === "qr" ? "QR" : kind === "web" ? "වෙබ්" : "සියලු";
+  if (!target.length) { toast(label + " වාර්තා නොමැත", "warn"); return; }
+  if (!await confirmTwice(
+    label + " පැමිණීම් වාර්තා " + target.length + "ක් මකනවාද?",
+    "අවසන් තහවුරුව — වාර්තා " + target.length + "ක් ස්ථිරවම මකා දැමේ. ආපසු හැරවිය නොහැක.",
+    "ඔව්, ස්ථිරවම මකන්න")) return;
+  try {
+    for (let i = 0; i < target.length; i += 400) {
+      const batch = writeBatch(db);
+      target.slice(i, i + 400).forEach(v => batch.delete(doc(db, "visits", v.id)));
+      await batch.commit();
+    }
+    logAudit("visits.reset", (kind || "all") + " ×" + target.length);
+    toast(label + " ගණන ශුන්‍ය කෙරිණි ✓ (" + target.length + ")", "ok");
+  } catch (e) { toast("මැකීම අසාර්ථකයි — නැවත උත්සාහ කරන්න", "err"); }
+}
+
 renderers.analytics = function () {
   const S = visitStats();
   const days = 14, series = [];
@@ -1904,6 +2000,12 @@ renderers.analytics = function () {
       '<span><i style="background:linear-gradient(180deg,#9CEFC9,#43BE8B)"></i>වෙබ්</span>' +
       '<span><i style="background:linear-gradient(105deg,#F7E9C4,#C9A35C)"></i>සෘජු</span></div>' +
       (visitsCapped ? '<p class="slot-note warn">නවතම වාර්තා 5000 පමණක් පෙන්වයි.</p>' : '')) +
+    card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ස්ථිරවම මකා දමයි · දෙවරක් තහවුරු කරයි</p>' +
+      '<div class="row">' +
+        '<button class="btn sm bad" id="rsQr"  type="button">QR ගණන ශුන්‍ය (' + S.by.qr + ')</button>' +
+        '<button class="btn sm bad" id="rsWeb" type="button">වෙබ් ගණන ශුන්‍ය (' + S.by.web + ')</button>' +
+        '<button class="btn sm bad" id="rsAll" type="button">සියල්ල ශුන්‍ය (' + S.total + ')</button>' +
+      '</div>') +
     card('<div class="card-head"><h3>නවතම පැමිණීම්</h3>' +
       '<button class="btn sm ghost" id="vCsv" type="button">CSV බාගන්න</button></div>' +
       (recent.length
@@ -1914,6 +2016,9 @@ renderers.analytics = function () {
           '</tbody></table></div>'
         : '<div class="empty">තවම පැමිණීම් වාර්තා නැත. පොදු අඩවියේ නව <code>app.js</code> deploy කළ පසු මෙය පිරෙනු ඇත.</div>'));
 
+  if ($("#rsQr"))  $("#rsQr").onclick  = () => resetVisits("qr");
+  if ($("#rsWeb")) $("#rsWeb").onclick = () => resetVisits("web");
+  if ($("#rsAll")) $("#rsAll").onclick = () => resetVisits(null);
   if ($("#vCsv")) $("#vCsv").onclick = () => downloadCsv(
     [["දිනය", "මූලාශ්‍රය", "භාෂාව", "යොමුව"]].concat(visits.map(v =>
       [visitSecs(v) ? new Date(visitSecs(v) * 1000).toLocaleString("si-LK") : visitDay(v), kindLabel[visitKind(v)], v.lang || "", v.ref || ""])),
@@ -1935,45 +2040,96 @@ function loadQR() {
 }
 renderers.qr = function () {
   const S = visitStats();
+  const unlocked = qrUnlocked;
   $("#p-qr").innerHTML =
     card('<h3>ආරාධනා QR කේතය</h3>' +
-      '<p class="hint">මෙම QR කේතය හරහා පැමිණෙන අය <b>“QR කේතයෙන්”</b> ලෙස වෙන් වෙන්ව ගණන් ගැනේ</p>' +
-      '<div class="grid2">' +
-        fld("ඉලක්ක ලිපිනය", "qr_url", PUBLIC_SITE) +
-        fld("මූලාශ්‍ර ලේබලය (src)", "qr_src", "qr") +
-      '</div>' +
+      '<p class="hint">මෙම QR හරහා පැමිණෙන අය <b>“QR කේතයෙන්”</b> ලෙස වෙන් වෙන්ව ගණන් ගැනේ</p>' +
+      '<div class="field"><label for="qr_url">ඉලක්ක ලිපිනය ' +
+        (unlocked ? '<span class="pill pend">විවෘත</span>' : '<span class="pill side">🔒 අගුළු දමා ඇත</span>') + '</label>' +
+        '<input class="inp" id="qr_url" value="' + esc(PUBLIC_SITE) + '"' + (unlocked ? '' : ' readonly') + '></div>' +
+      '<label class="diag-toggle" style="margin-bottom:12px"><input type="checkbox" id="qrUnlock"' + (unlocked ? ' checked' : '') + '>' +
+        '<span>ලිපිනය වෙනස් කිරීමට අගුළු අරින්න <i>වැරදි ලිපිනයක් QR එකට යාම වැළැක්වීම සඳහා පෙරනිමියෙන් අගුළු දමා ඇත</i></span></label>' +
+      '<div class="field"><label for="qr_src">මූලාශ්‍රය</label><select class="inp" id="qr_src">' +
+        ['qr', 'card', 'print', 'invite'].map(o => '<option value="' + o + '"' + (o === qrSrc ? ' selected' : '') + '>' + o + '</option>').join("") +
+      '</select></div>' +
       '<div class="row" style="margin-bottom:16px">' +
         '<button class="btn primary sm" id="qrMake" type="button">QR කේතය සාදන්න</button>' +
-        '<button class="btn sm ghost" id="qrPng" type="button" disabled>PNG බාගන්න</button>' +
+        '<button class="btn sm ghost" id="qrPng" type="button" disabled>PNG සුරකින්න</button>' +
         '<button class="btn sm ghost" id="qrCopy" type="button">සබැඳිය copy</button>' +
       '</div>' +
       '<div class="qr-wrap"><div class="qr-box" id="qrBox"><div class="empty" style="width:210px">QR කේතය මෙහි දිස් වේ</div></div>' +
       '<div class="qr-meta"><label style="font-size:.8rem;font-weight:700;color:var(--mut)">සම්පූර්ණ සබැඳිය</label>' +
-      '<code id="qrLink">' + esc(PUBLIC_SITE + "/?src=qr") + '</code>' +
+      '<code id="qrLink">' + esc(PUBLIC_SITE + "/?src=" + qrSrc) + '</code>' +
       '<p class="hint" style="padding:0;margin-top:12px">මුද්‍රිත ආරාධනා පත්‍රවල මෙය භාවිතා කරන්න. ' +
-      'WhatsApp වැනි තැන්වලට <code>?src=web</code> යොදන්න — එවිට ඒවා වෙන් වෙන්ව ගණන් ගැනේ.</p>' +
+      'ජංගම දුරකථනයේ <b>PNG සුරකින්න</b> ඔබූ විට share sheet එක හරහා ගැලරියට සුරැකේ. ' +
+      'නොහොත් QR රූපය මත <b>දිගටම ඔබා</b> “Save Image” තෝරන්න.</p>' +
       '<div class="stats" style="margin-top:14px">' + stat(S.by.qr, "QR ස්කෑන්", "gold") + stat(S.by.web, "වෙබ්", "ok") + '</div>' +
+      '<div class="row"><button class="btn sm bad" id="qrReset" type="button">QR ගණන ශුන්‍ය කරන්න</button></div>' +
       '</div></div>');
 
   const link = () => {
     const base = ($("#qr_url").value.trim() || PUBLIC_SITE).replace(/\/+$/, "");
-    const src = encodeURIComponent($("#qr_src").value.trim() || "qr");
-    return base + "/?src=" + src;
+    return base + "/?src=" + encodeURIComponent($("#qr_src").value.trim() || "qr");
   };
   const paint = () => { $("#qrLink").textContent = link(); };
-  $("#qr_url").oninput = paint; $("#qr_src").oninput = paint;
+  $("#qr_url").oninput = paint;
+  $("#qr_src").onchange = () => { qrSrc = $("#qr_src").value; paint(); };
+  $("#qrUnlock").onchange = () => { qrUnlocked = $("#qrUnlock").checked; renderers.qr(); };
+  if ($("#qrReset")) $("#qrReset").onclick = () => resetVisits("qr");
+
+  /* Draw the code onto a canvas ourselves. The library's createDataURL() returns
+     a `data:` URL, and iOS Safari ignores the download attribute on those — which
+     is exactly why saving did nothing on a phone. A canvas gives us a real Blob,
+     which can go through the native share sheet or a blob: download. */
+  const drawQR = (q, px) => {
+    const n = q.getModuleCount(), margin = 4, total = n + margin * 2;
+    const cell = Math.max(2, Math.floor(px / total));
+    const size = cell * total;
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const x = c.getContext("2d");
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, size, size);
+    x.fillStyle = "#0a0a0c";
+    for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+      if (q.isDark(r, col)) x.fillRect((col + margin) * cell, (r + margin) * cell, cell, cell);
+    }
+    return c;
+  };
+  const saveCanvas = async (canvas) => {
+    const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+    if (!blob) { toast("රූපය සෑදීම අසාර්ථකයි", "err"); return; }
+    const name = "helasiritha-qr-" + $("#qr_src").value + ".png";
+    try {
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        await navigator.share({ files: [file], title: "Helasiritha QR" });
+        toast("Share sheet හරහා සුරකින්න ✓", "ok"); return;
+      }
+    } catch (_) { /* user dismissed the sheet, or unsupported → fall through */ }
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast("QR කේතය බාගත විය ✓", "ok");
+    } catch (_) {
+      toast("රූපය මත දිගටම ඔබා “Save Image” තෝරන්න", "warn");
+    }
+  };
+
   $("#qrMake").onclick = async () => {
     const b = $("#qrMake"); b.disabled = true; b.textContent = "සාදමින්…";
     try {
       const qrcode = await loadQR();
       const q = qrcode(0, "M"); q.addData(link()); q.make();
-      $("#qrBox").innerHTML = q.createSvgTag({ cellSize: 6, margin: 4 });
+      const view = drawQR(q, 640);                 /* on-screen: long-press friendly */
+      view.style.width = "210px"; view.style.height = "210px";
+      view.setAttribute("alt", "Helasiritha QR");
+      $("#qrBox").innerHTML = ""; $("#qrBox").appendChild(view);
+      const big = drawQR(q, 1280);                 /* saved file: print quality */
       $("#qrPng").disabled = false;
-      $("#qrPng").onclick = () => {
-        const a = document.createElement("a");
-        a.href = q.createDataURL(10, 4); a.download = "helasiritha-qr.png"; a.click();
-        toast("QR කේතය බාගත විය ✓", "ok");
-      };
+      $("#qrPng").onclick = () => saveCanvas(big);
       toast("QR කේතය සාදන ලදී ✓", "ok");
     } catch (e) { toast("QR සෑදීම අසාර්ථකයි — අන්තර්ජාලය පරීක්ෂා කරන්න", "err"); }
     b.disabled = false; b.textContent = "QR කේතය සාදන්න";
