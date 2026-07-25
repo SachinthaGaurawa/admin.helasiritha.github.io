@@ -2000,6 +2000,10 @@ renderers.analytics = function () {
       '<span><i style="background:linear-gradient(180deg,#9CEFC9,#43BE8B)"></i>වෙබ්</span>' +
       '<span><i style="background:linear-gradient(105deg,#F7E9C4,#C9A35C)"></i>සෘජු</span></div>' +
       (visitsCapped ? '<p class="slot-note warn">නවතම වාර්තා 5000 පමණක් පෙන්වයි.</p>' : '')) +
+    card('<h3>ගණන් වැඩ කරනවාද?</h3>' +
+      '<p class="hint">ගණන් ශුන්‍ය නම් බොහෝවිට `visits` rule එක deploy වී නැත. මෙය ඒක තහවුරු කරයි.</p>' +
+      '<div class="row"><button class="btn primary sm" id="vProbe" type="button">පැමිණීම් ලිවීම පරීක්ෂා කරන්න</button></div>' +
+      '<pre id="vProbeOut" class="up-test" hidden></pre>') +
     card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ස්ථිරවම මකා දමයි · දෙවරක් තහවුරු කරයි</p>' +
       '<div class="row">' +
         '<button class="btn sm bad" id="rsQr"  type="button">QR ගණන ශුන්‍ය (' + S.by.qr + ')</button>' +
@@ -2016,6 +2020,41 @@ renderers.analytics = function () {
           '</tbody></table></div>'
         : '<div class="empty">තවම පැමිණීම් වාර්තා නැත. පොදු අඩවියේ නව <code>app.js</code> deploy කළ පසු මෙය පිරෙනු ඇත.</div>'));
 
+  /* Definitive answer to "why is nothing being counted?" — write a real probe
+     row exactly as the public site does, then read back the precise outcome. */
+  if ($("#vProbe")) $("#vProbe").onclick = async () => {
+    const out = $("#vProbeOut"); const btn = $("#vProbe");
+    out.hidden = false; out.textContent = "පරීක්ෂා කරමින්…"; btn.disabled = true;
+    const p2 = (n) => String(n).padStart(2, "0");
+    const d = new Date();
+    const day = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    const lines = [];
+    try {
+      const ref = await addDoc(collection(db, "visits"), {
+        kind: "direct", day: day, ref: "admin-probe", lang: "si",
+        ua: "admin-selftest", ts: serverTimestamp()
+      });
+      lines.push("✓ ලිවීම සාර්ථකයි — `visits` rule එක deploy වී ඇත.");
+      lines.push("  doc id: " + ref.id);
+      lines.push("  දැන් පොදු අඩවියේ ගණන් වැඩ කරයි.");
+      try { await deleteDoc(doc(db, "visits", ref.id)); lines.push("  (පරීක්ෂණ වාර්තාව මකා දමන ලදී)"); }
+      catch (_) { lines.push("  ⚠ පරීක්ෂණ වාර්තාව මැකිය නොහැක — ලැයිස්තුවෙන් අතින් මකන්න."); }
+    } catch (e) {
+      const code = (e && e.code) || String(e);
+      lines.push("✗ ලිවීම අසාර්ථකයි: " + code);
+      if (String(code).indexOf("permission-denied") > -1) {
+        lines.push("");
+        lines.push("හේතුව: Firestore rules වල `visits` කොටස deploy වී නැත.");
+        lines.push("විසඳුම: Firebase Console → Firestore Database → Rules →");
+        lines.push("        firestore.rules ගොනුවේ අන්තර්ගතය paste කර **Publish**.");
+        lines.push("        ඉන් පසු පොදු අඩවිය නැවත විවෘත කරන්න.");
+      } else {
+        lines.push("අන්තර්ජාල සම්බන්ධතාවය සහ Firebase වින්‍යාසය පරීක්ෂා කරන්න.");
+      }
+    }
+    out.textContent = lines.join("\n");
+    btn.disabled = false;
+  };
   if ($("#rsQr"))  $("#rsQr").onclick  = () => resetVisits("qr");
   if ($("#rsWeb")) $("#rsWeb").onclick = () => resetVisits("web");
   if ($("#rsAll")) $("#rsAll").onclick = () => resetVisits(null);
