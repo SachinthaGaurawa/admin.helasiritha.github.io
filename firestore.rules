@@ -1,0 +1,134 @@
+rules_version = '2';
+
+/**
+ * Helasiritha — Firestore Security Rules
+ * ───────────────────────────────────────
+ * Deploy: Firebase Console → Firestore Database → Rules → paste → Publish
+ *         (or `firebase deploy --only firestore:rules` with the Firebase CLI).
+ *
+ * This file is the single source of truth for who may read/write each
+ * collection. It intentionally mirrors the exact collections and shapes
+ * app.js (both the admin panel and the public site) already assume:
+ *   site/{content|agenda|theme|stats}, gallery, guests, rsvps, blessings,
+ *   visits, audit.
+ *
+ * Root administrator is hard-locked to a single Google account, per the
+ * project's "single admin" requirement. Nobody else can ever read/write
+ * admin-only data, no matter what the client-side code does.
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'gaurawasachintha@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // ── /site/{content|agenda|theme|stats} ──────────────────────────────
+    // Public content, agenda, live theme palette, confirmed head-count.
+    // Read: everyone (the public wedding page renders from these).
+    // Write: root admin only.
+    match /site/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── /gallery/{itemId} ────────────────────────────────────────────────
+    // "Moments of Love" + signature banners. Read: everyone. Write: admin.
+    match /gallery/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── /guests/{guestId} ────────────────────────────────────────────────
+    // Admin-managed roster (name, family, side, status, liquor, dietary,
+    // tableNumber, count). Read is public ONLY so the public RSVP page can
+    // let a guest find their own name — see README "Known tradeoff" note.
+    // Guests can never write here directly; only the RSVP flow's own
+    // `rsvps/{guestId}` document (below) is guest-writable.
+    match /guests/{guestId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── /rsvps/{guestId} ─────────────────────────────────────────────────
+    // One doc per guest, keyed by the matching guests/{id}. The public RSVP
+    // form creates/updates its own record; nobody may read another guest's
+    // response, and nobody but the admin may delete one.
+    match /rsvps/{guestId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() || isValidRsvp(guestId);
+      allow delete: if isAdmin();
+    }
+    function isValidRsvp(guestId) {
+      let d = request.resource.data;
+      return d.guestId is string && d.guestId == guestId
+        && d.name    is string && d.name.size()   <= 200
+        && d.family  is string && d.family.size() <= 200
+        && d.side    is string && d.side.size()   <= 60
+        && d.attending is bool
+        && d.liquor    is bool
+        && d.party  is number && d.party  >= 0 && d.party  <= 20
+        && d.dietary is string && d.dietary.size() <= 300;
+    }
+
+    // ── /blessings/{id} ──────────────────────────────────────────────────
+    // Public "love notes" queue. Anyone may submit (always unapproved);
+    // a submission is only readable once the admin approves it. The admin
+    // panel's own listener is unfiltered, which is fine — isAdmin() below
+    // does not depend on resource.data, so an admin-authenticated listen
+    // is always permitted regardless of the per-document `approved` gate.
+    match /blessings/{id} {
+      allow read: if isAdmin() || resource.data.approved == true;
+      allow create: if isValidBlessing();
+      allow update, delete: if isAdmin();
+    }
+    function isValidBlessing() {
+      let d = request.resource.data;
+      return d.name    is string && d.name.size()    > 0 && d.name.size()    <= 120
+        && d.message is string && d.message.size() > 0 && d.message.size() <= 600
+        && d.approved == false;
+    }
+
+    // ── /visits/{id} ─────────────────────────────────────────────────────
+    // Anonymous arrival telemetry (qr / web / direct) written by the public
+    // site. Write-only for the public — nobody can read, edit or delete an
+    // entry except the admin dashboard's analytics view.
+    match /visits/{id} {
+      allow read: if isAdmin();
+      allow create: if isValidVisit();
+      allow update, delete: if false;
+    }
+    function isValidVisit() {
+      let d = request.resource.data;
+      return d.kind in ['qr', 'web', 'direct']
+        && d.day is string
+        && d.ref  is string && d.ref.size()  <= 200
+        && d.lang is string && d.lang.size() <= 4
+        && d.ua   is string && d.ua.size()   <= 200;
+    }
+
+    // ── /audit/{id} ──────────────────────────────────────────────────────
+    // Tamper-evident admin activity log. Append-only — not even the root
+    // admin can edit or delete a past entry once written.
+    match /audit/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidAudit();
+      allow update, delete: if false;
+    }
+    function isValidAudit() {
+      let d = request.resource.data;
+      return d.email  is string
+        && d.action is string && d.action.size() <= 60
+        && d.target is string && d.target.size() <= 180;
+    }
+
+    // ── Everything else: deny by default ────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
