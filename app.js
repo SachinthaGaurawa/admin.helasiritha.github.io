@@ -890,10 +890,19 @@ renderers.details = function () {
       '<div class="grid2">' + fld("ස්ථානයේ නම", "f_venue", c.venue) + fld("Google Maps සබැඳිය", "f_venueMapUrl", c.venueMapUrl) + '</div>' +
       tri("venueCity", "නගරය", c.venueCity, c.venueCityEn, c.venueCityTa)) +
 
-    card('<h3>ආරාධනා සන්නසේ පෙළ</h3><p class="hint">සන්නස (invitation scroll) සඳහා පමණක් · හිස්ව තැබුවොත් පෙරනිමි පෙළ යෙදේ</p>' +
+    card('<h3>ආරාධනා සන්නසේ පෙළ</h3><p class="hint">සන්නස (invitation scroll) සඳහා පමණක් · හිස්ව තැබුවොත් පෙරනිමි පෙළ යෙදේ · ' +
+      'ඉහත මනාල යුවළ / දිනය-වේලාව-ස්ථානය කොටස් වල වෙනස්කම් ද සන්නසට ස්වයංක්‍රීයව යෙදේ</p>' +
       tri("join", "එක්වීමේ පේළිය", c.joinSi || "", c.joinEn || "", c.joinTa || "", "textarea") +
       tri("sannasaBody", "ආරාධනා ඡේදය", c.sannasaBodySi || "", c.sannasaBodyEn || "", c.sannasaBodyTa || "", "textarea") +
-      tri("poruwa", "පෝරු මුහුර්ත පේළිය", c.poruwaSi || "", c.poruwaEn || "", c.poruwaTa || "", "textarea")) +
+      tri("poruwa", "පෝරු මුහුර්ත පේළිය", c.poruwaSi || "", c.poruwaEn || "", c.poruwaTa || "", "textarea") +
+      /* Live preview: the SAME sannasa.html the public site embeds, loaded straight from the
+         live domain — it reads the very Firestore doc this form just saved, so a save shows up
+         here within a second with zero extra wiring. No more "save, switch tabs, scroll down,
+         hope it looks right" — the proof is right here. */
+      '<div class="sannasa-preview" id="sannasaPreviewWrap"><div class="sannasa-preview-head">' +
+        '<span>සජීවී පෙරදසුන · Live Preview</span>' +
+        '<a href="https://helasiritha.vercel.app/sannasa.html" target="_blank" rel="noopener">නව ටැබ් එකෙන් ↗</a>' +
+      '</div><iframe class="sannasa-preview-frame" id="sannasaPreviewFrame" src="https://helasiritha.vercel.app/sannasa.html" title="සන්නස පෙරදසුන" loading="lazy"></iframe></div>') +
 
     card('<h3>ආදර සටහන හා සම්බන්ධතා</h3>' +
       fld("ආදර සටහන (Love Note)", "f_loveNote", c.loveNote, "textarea") +
@@ -1859,6 +1868,18 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawe
 window.addEventListener("online",  () => { hardOffline = false; netState(); });
 window.addEventListener("offline", () => netState());
 setInterval(() => netState(), 4000);          /* keeps the badge honest */
+
+/* Sannasa live preview (Details panel): the embedded page posts its content-fit
+   height exactly like it does to the public site's own parent — hug the iframe
+   to it here too. Global listener (not re-bound per render) since #sannasaPreviewFrame
+   only exists while the Details panel is open; the lookup is simply a no-op otherwise. */
+window.addEventListener("message", (e) => {
+  const d = e && e.data;
+  if (!d || d.__sannasa !== "height" || typeof d.h !== "number") return;
+  const frame = $("#sannasaPreviewFrame");
+  if (!frame) return;
+  frame.style.height = Math.max(320, Math.min(2600, Math.round(d.h) + 20)) + "px";
+}, { passive: true });
 
 } /* ── end wrong-repository guard ── */
 
