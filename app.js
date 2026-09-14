@@ -895,6 +895,14 @@ renderers.details = function () {
       tri("join", "එක්වීමේ පේළිය", c.joinSi || "", c.joinEn || "", c.joinTa || "", "textarea") +
       tri("sannasaBody", "ආරාධනා ඡේදය", c.sannasaBodySi || "", c.sannasaBodyEn || "", c.sannasaBodyTa || "", "textarea") +
       tri("poruwa", "පෝරු මුහුර්ත පේළිය", c.poruwaSi || "", c.poruwaEn || "", c.poruwaTa || "", "textarea") +
+      '<p class="hint" style="padding-inline-start:13px;margin-top:14px">ඉතිරි ලියවිල්ල — ' +
+      '<b>ස්වස්ති සිද්ධම්</b> හැරෙන්නට සන්නසේ ඇති හැම පේළියක්ම මෙතනින් වෙනස් කළ හැක</p>' +
+      tri("sri", "ශ්‍රී ලකුණ", c.sriSi || "", c.sriEn || "", c.sriTa || "") +
+      tri("eyebrow", "ශීර්ෂ පේළිය", c.eyebrowSi || "", c.eyebrowEn || "", c.eyebrowTa || "") +
+      tri("lDate", "'දිනය' ලේබලය", c.lDateSi || "", c.lDateEn || "", c.lDateTa || "") +
+      tri("lTime", "'වේලාව' ලේබලය", c.lTimeSi || "", c.lTimeEn || "", c.lTimeTa || "") +
+      tri("lVenue", "'ස්ථානය' ලේබලය", c.lVenueSi || "", c.lVenueEn || "", c.lVenueTa || "") +
+      tri("cue", "අවසාන ඉඟි පේළිය", c.cueSi || "", c.cueEn || "", c.cueTa || "") +
       /* Live preview: the SAME sannasa.html the public site embeds, loaded straight from the
          live domain — it reads the very Firestore doc this form just saved, so a save shows up
          here within a second with zero extra wiring. No more "save, switch tabs, scroll down,
@@ -957,7 +965,14 @@ renderers.details = function () {
       venueSi: v("f_venue"), venueEn: v("f_venue"), venueTa: v("f_venue"),
       citySi: v("venueCitySi_"), cityEn: v("venueCityEn_"), cityTa: v("venueCityTa_"),
       timeSi: v("ceremonyTimeSi_"), timeEn: v("ceremonyTimeEn_"), timeTa: v("ceremonyTimeTa_"),
-      dateSi: ds.si, dateEn: ds.en, dateTa: ds.ta
+      dateSi: ds.si, dateEn: ds.en, dateTa: ds.ta,
+      /* the rest of the decree's fixed chrome — everything except Swasti Siddham */
+      sriSi: v("sriSi_"), sriEn: v("sriEn_"), sriTa: v("sriTa_"),
+      eyebrowSi: v("eyebrowSi_"), eyebrowEn: v("eyebrowEn_"), eyebrowTa: v("eyebrowTa_"),
+      lDateSi: v("lDateSi_"), lDateEn: v("lDateEn_"), lDateTa: v("lDateTa_"),
+      lTimeSi: v("lTimeSi_"), lTimeEn: v("lTimeEn_"), lTimeTa: v("lTimeTa_"),
+      lVenueSi: v("lVenueSi_"), lVenueEn: v("lVenueEn_"), lVenueTa: v("lVenueTa_"),
+      cueSi: v("cueSi_"), cueEn: v("cueEn_"), cueTa: v("cueTa_")
     };
     try {
       await saveContent(patch);
