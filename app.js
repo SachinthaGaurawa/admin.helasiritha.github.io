@@ -196,6 +196,7 @@ let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = 
 let visitsCapped = false, signMode = "unknown";
 let sessionStart = Date.now(), lastActivity = Date.now();
 let upTestReport = "";
+let pubDirReport = "";
 let rsvpMap = {};
 let current = "dashboard";
 let subsStarted = false;
@@ -612,9 +613,32 @@ function saveTheme(t, keepPrev) {
   }
   return withAudit(setDoc(doc(db, "site", "theme"), payload, { merge: true }), "theme.save", t.primary || "");
 }
-const addGuest    = (o)     => withAudit(addDoc(collection(db, "guests"), Object.assign({ ts: serverTimestamp() }, o)), "guest.add", o.name);
-const updGuest    = (id, o) => updateDoc(doc(db, "guests", id), o);
-const delGuest    = (id)    => withAudit(deleteDoc(doc(db, "guests", id)), "guest.delete", id);
+/* `guestsPublic/{id}` mirrors ONLY {name, family, side} out of `guests/{id}`.
+   The public site reads that mirror (never the full `guests` doc) so a
+   visitor can never see another guest's status/liquor/dietary/table —
+   see firestore.rules. Every guest-mutating path below keeps it in sync;
+   "Rebuild directory" in the Security panel repairs it if it ever drifts. */
+function addGuest(o) {
+  const ref = doc(collection(db, "guests"));
+  const batch = writeBatch(db);
+  batch.set(ref, Object.assign({ ts: serverTimestamp() }, o));
+  batch.set(doc(db, "guestsPublic", ref.id), { name: o.name || "", family: o.family || "", side: o.side || "" });
+  return withAudit(batch.commit(), "guest.add", o.name);
+}
+function updGuest(id, o) {
+  const p = updateDoc(doc(db, "guests", id), o);
+  const pub = {};
+  if ("name" in o) pub.name = o.name || "";
+  if ("family" in o) pub.family = o.family || "";
+  if ("side" in o) pub.side = o.side || "";
+  return Object.keys(pub).length ? p.then(() => setDoc(doc(db, "guestsPublic", id), pub, { merge: true })) : p;
+}
+function delGuest(id) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "guests", id));
+  batch.delete(doc(db, "guestsPublic", id));
+  return withAudit(batch.commit(), "guest.delete", id);
+}
 const addGalleryItem = (o)  => addDoc(collection(db, "gallery"), Object.assign({ ts: serverTimestamp() }, o));
 const updGallery  = (id, o) => updateDoc(doc(db, "gallery", id), o);
 const delGallery  = (id)    => withAudit(deleteDoc(doc(db, "gallery", id)), "gallery.delete", id);
@@ -1089,14 +1113,18 @@ renderers.guests = function () {
     if (!clean.length) { toast("දත්ත හමු නොවීය", "warn"); return; }
     const btn = $("#bkAdd"); btn.disabled = true; btn.textContent = "ආයාත කරමින්…";
     try {
+      /* Each guest now costs 2 writes (guests + its guestsPublic mirror), so the
+         chunk size is halved from Firestore's 500-write batch ceiling. */
       let n = 0;
-      for (let i = 0; i < clean.length; i += 400) {
+      for (let i = 0; i < clean.length; i += 240) {
         const batch = writeBatch(db);
-        clean.slice(i, i + 400).forEach(r => {
-          batch.set(doc(collection(db, "guests")), {
+        clean.slice(i, i + 240).forEach(r => {
+          const ref = doc(collection(db, "guests"));
+          batch.set(ref, {
             name: r.name, family: r.family || "", side, count: r.count,
             status: "pending", liquor: false, dietary: "", tableNumber: null, ts: serverTimestamp()
           });
+          batch.set(doc(db, "guestsPublic", ref.id), { name: r.name, family: r.family || "", side });
           n++;
         });
         await batch.commit();
@@ -2211,6 +2239,12 @@ renderers.security = function () {
       '<span class="faint" style="font-size:.8rem">ආගන්තුකයෝ ' + guests.length + ' · පිළිතුරු ' + rsvps.length +
       ' · ඡායාරූප ' + gallery.length + ' · පැතුම් ' + blessings.length + '</span></div>') +
 
+    card('<h3>පොදු ආගන්තුක නාමාවලිය</h3>' +
+      '<p class="hint">පොදු අඩවියේ RSVP සෙවීමට පෙනෙන්නේ නම/පවුල/පාර්ශවය පමණයි — liquor/status/table වැනි රහස්‍ය දත්ත කිසි විටෙක පොදු නොවේ (firestore.rules). ' +
+      'මෙම බොත්තම <code>guestsPublic</code> කැඩපත <code>guests</code> සමඟ නැවත සමමුහූර්ත කරයි — firestore.rules අලුතින් publish කළ පසු, හෝ දත්ත ගැලපෙනවාදැයි සැක සිතේ නම් එබන්න.</p>' +
+      '<div class="row"><button class="btn sm primary" id="secRebuildPub" type="button">නාමාවලිය යළි ගොඩනගන්න</button></div>' +
+      '<pre id="pubDirOut" class="up-test"' + (pubDirReport ? '>' + esc(pubDirReport) : ' hidden>') + '</pre>') +
+
     card('<div class="card-head"><h3>පරිපාලන ක්‍රියා සටහන</h3>' +
       '<span class="faint" style="font-size:.78rem">නවතම ' + audit.length + ' · වෙනස් කළ නොහැක</span></div>' +
       '<p class="hint">සෑම වෙනසක්ම මෙහි ස්ථිරව සටහන් වේ. rules මගින් මකා දැමීම හෝ සංස්කරණය තහනම්.</p>' +
@@ -2275,6 +2309,32 @@ renderers.security = function () {
     renderers.security();
     paint(upTestReport);
     toast(sig ? "Signed උඩුගත කිරීම සූදානම් ✓" : "උඩුගත කිරීම සකසා නැත — විස්තර බලන්න", sig ? "ok" : "err");
+  };
+
+  /* Re-derives guestsPublic/{id} = {name, family, side} for every guests/{id}
+     the admin can currently see — a one-click backfill/repair, and safe to
+     run any number of times (idempotent, chunked to Firestore's batch limit). */
+  $("#secRebuildPub").onclick = async () => {
+    const btn = $("#secRebuildPub");
+    btn.disabled = true; btn.textContent = "ගොඩනගමින්…";
+    try {
+      let n = 0;
+      for (let i = 0; i < guests.length; i += 400) {
+        const batch = writeBatch(db);
+        guests.slice(i, i + 400).forEach(g => {
+          batch.set(doc(db, "guestsPublic", g.id), { name: g.name || "", family: g.family || "", side: g.side || "" });
+          n++;
+        });
+        await batch.commit();
+      }
+      pubDirReport = "සමමුහූර්ත විය: guestsPublic ලේඛන " + n + "ක් යාවත්කාලීන කෙරිණි · " + new Date().toLocaleString("si-LK");
+      toast("පොදු නාමාවලිය යාවත්කාලීනයි ✓ (" + n + ")", "ok");
+    } catch (e) {
+      pubDirReport = "අසාර්ථකයි: " + ((e && e.message) || e) + "\n⚠ firestore.rules හි guestsPublic ලියීම admin සඳහා allow වී තිබේදැයි බලන්න.";
+      toast("සමමුහූර්තකරණය අසාර්ථකයි", "err");
+    }
+    btn.disabled = false; btn.textContent = "නාමාවලිය යළි ගොඩනගන්න";
+    renderers.security();
   };
 
   $("#secOut").onclick = async () => {

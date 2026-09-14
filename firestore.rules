@@ -9,8 +9,8 @@ rules_version = '2';
  * This file is the single source of truth for who may read/write each
  * collection. It intentionally mirrors the exact collections and shapes
  * app.js (both the admin panel and the public site) already assume:
- *   site/{content|agenda|theme|stats}, gallery, guests, rsvps, blessings,
- *   visits, audit.
+ *   site/{content|agenda|theme|stats}, gallery, guests, guestsPublic, rsvps,
+ *   blessings, visits, audit.
  *
  * Root administrator is hard-locked to a single Google account, per the
  * project's "single admin" requirement. Nobody else can ever read/write
@@ -44,12 +44,22 @@ service cloud.firestore {
     }
 
     // ── /guests/{guestId} ────────────────────────────────────────────────
-    // Admin-managed roster (name, family, side, status, liquor, dietary,
-    // tableNumber, count). Read is public ONLY so the public RSVP page can
-    // let a guest find their own name — see README "Known tradeoff" note.
-    // Guests can never write here directly; only the RSVP flow's own
-    // `rsvps/{guestId}` document (below) is guest-writable.
+    // Admin-managed roster — the FULL record (name, family, side, status,
+    // liquor, dietary, tableNumber, count). Admin-only, both read and write:
+    // this is exactly the private data the public site must never see.
     match /guests/{guestId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── /guestsPublic/{guestId} ──────────────────────────────────────────
+    // A deliberately minimal mirror of `guests/{guestId}` — {name, family,
+    // side} ONLY — kept in sync by the admin panel every time a guest is
+    // added, edited or removed (see app.js addGuest/updGuest/delGuest and
+    // the "Rebuild directory" tool in the Security panel). This is the only
+    // guest data the public RSVP page ever reads, so a visitor can find
+    // their own name without ever seeing anyone's RSVP status, liquor
+    // preference, dietary notes or table assignment.
+    match /guestsPublic/{guestId} {
       allow read: if true;
       allow write: if isAdmin();
     }
