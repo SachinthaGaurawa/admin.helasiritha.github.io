@@ -14,7 +14,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, reauthenticateWithPopup
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc,
@@ -114,6 +114,114 @@ function confirmBox(message, opts = {}) {
   });
 }
 
+/* ── Security PIN (QR Studio) ────────────────────────────────────────────────
+   Guards two accidental-click hazards in the QR Studio: overwriting an
+   already-generated/printed QR, and unlocking the target-URL field for
+   editing. This protects against a slip of the finger on an ALREADY-signed-in
+   device — Firestore rules (isAdmin()) are the real access boundary; the PIN
+   is a second, local gate on top of that. The hash+salt live in an admin-only
+   collection (adminSettings/security — see firestore.rules), never in
+   plaintext, and never in any document the public site or an unauthenticated
+   client can read. */
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function randomSalt() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+const hashPin = (pin, salt) => sha256Hex(salt + ":" + pin);
+
+function pinPrompt(message) {
+  return new Promise((resolve) => {
+    const m = $("#confirmModal");
+    m.innerHTML =
+      '<div class="modal-card">' +
+        '<div class="modal-ic ask">🔒</div>' +
+        '<h3>ආරක්ෂක PIN අංකය</h3>' +
+        '<p>' + esc(message || "දිගටම කරගෙන යාමට ඔබගේ PIN අංකය ඇතුළත් කරන්න.") + '</p>' +
+        '<input class="inp" id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" ' +
+          'placeholder="••••" style="text-align:center;font-size:1.4rem;letter-spacing:.3em;margin:10px 0">' +
+        '<div id="pinErr" class="faint" style="color:#e5484d;min-height:1.2em;font-size:.82rem"></div>' +
+        '<div class="modal-acts">' +
+          '<button class="btn ghost" id="mNo">අවලංගු</button>' +
+          '<button class="btn primary" id="mYes">තහවුරු කරන්න</button>' +
+        '</div>' +
+      '</div>';
+    m.classList.add("show");
+    const input = $("#pinInput", m);
+    const close = (v) => { m.classList.remove("show"); document.removeEventListener("keydown", key); resolve(v); };
+    const submit = () => { const v = input.value.trim(); if (!v) { $("#pinErr", m).textContent = "PIN අංකය ඇතුළත් කරන්න"; return; } close(v); };
+    const key = (e) => { if (e.key === "Escape") close(null); if (e.key === "Enter") { e.preventDefault(); submit(); } };
+    $("#mYes", m).onclick = submit;
+    $("#mNo", m).onclick = () => close(null);
+    m.onclick = (e) => { if (e.target === m) close(null); };
+    document.addEventListener("keydown", key);
+    setTimeout(() => input && input.focus(), 40);
+  });
+}
+
+function promptNewPin() {
+  return new Promise((resolve) => {
+    const m = $("#confirmModal");
+    m.innerHTML =
+      '<div class="modal-card">' +
+        '<div class="modal-ic ask">🔒</div>' +
+        '<h3>අලුත් PIN අංකයක් සකසන්න</h3>' +
+        '<p>අංක 4–8ක PIN එකක් ඇතුළත් කර, තහවුරු කිරීමට නැවත ටයිප් කරන්න.</p>' +
+        '<input class="inp" id="pinNew1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" ' +
+          'placeholder="අලුත් PIN" style="text-align:center;font-size:1.3rem;letter-spacing:.25em;margin:8px 0">' +
+        '<input class="inp" id="pinNew2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" ' +
+          'placeholder="නැවත ටයිප් කරන්න" style="text-align:center;font-size:1.3rem;letter-spacing:.25em;margin:8px 0">' +
+        '<div id="pinErr" class="faint" style="color:#e5484d;min-height:1.2em;font-size:.82rem"></div>' +
+        '<div class="modal-acts">' +
+          '<button class="btn ghost" id="mNo">අවලංගු</button>' +
+          '<button class="btn primary" id="mYes">සුරකින්න</button>' +
+        '</div>' +
+      '</div>';
+    m.classList.add("show");
+    const i1 = $("#pinNew1", m), i2 = $("#pinNew2", m), err = $("#pinErr", m);
+    const close = (v) => { m.classList.remove("show"); document.removeEventListener("keydown", key); resolve(v); };
+    const submit = () => {
+      const a = i1.value.trim(), b = i2.value.trim();
+      if (!/^\d{4,8}$/.test(a)) { err.textContent = "PIN එක අංක 4-8ක් විය යුතුයි"; return; }
+      if (a !== b) { err.textContent = "PIN අංක දෙක නොගැලපේ"; i2.value = ""; i2.focus(); return; }
+      close(a);
+    };
+    const key = (e) => { if (e.key === "Escape") close(null); if (e.key === "Enter") { e.preventDefault(); submit(); } };
+    $("#mYes", m).onclick = submit;
+    $("#mNo", m).onclick = () => close(null);
+    m.onclick = (e) => { if (e.target === m) close(null); };
+    document.addEventListener("keydown", key);
+    setTimeout(() => i1 && i1.focus(), 40);
+  });
+}
+
+/* Resolves true only after a correct PIN is entered. If no PIN has ever been
+   set, the action is blocked outright (not silently allowed) — a QR Studio
+   with PIN protection "on" that quietly does nothing until first configured
+   would be worse than no protection at all, since it looks protected. */
+async function requirePin(message) {
+  if (!pinState || !pinState.pinHash) {
+    toast("පළමුව Security → PIN කළමනාකරණය තුළින් PIN අංකයක් සකසන්න", "warn");
+    return false;
+  }
+  const entered = await pinPrompt(message);
+  if (entered == null) return false;
+  const hash = await hashPin(entered, pinState.pinSalt);
+  if (hash !== pinState.pinHash) { toast("වැරදි PIN අංකයක්", "err"); return false; }
+  return true;
+}
+async function savePin(newPin) {
+  const salt = randomSalt();
+  const hash = await hashPin(newPin, salt);
+  await withAudit(setDoc(doc(db, "adminSettings", "security"), {
+    pinHash: hash, pinSalt: salt, updatedAt: Date.now(),
+    updatedBy: (auth.currentUser && auth.currentUser.email) || ""
+  }), "pin.set", "");
+  toast("PIN අංකය සුරකින ලදී ✓", "ok");
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    CONTRACT DEFAULTS — mirror the public site byte-for-byte so the editor always
    shows the real current text even before the first Firestore save exists.
@@ -194,6 +302,8 @@ let agenda    = AGENDA_DEFAULT.slice();
 let theme     = Object.assign({}, THEME_DEFAULT);
 let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [];
 let visitsCapped = false, signMode = "unknown";
+let qrPersisted = null;   // { baseUrl, src, url, generatedAt, generatedBy } — adminSettings/qr, synced live
+let pinState    = null;   // { pinHash, pinSalt, updatedAt, updatedBy } — adminSettings/security, synced live
 let sessionStart = Date.now(), lastActivity = Date.now();
 let upTestReport = "";
 let pubDirReport = "";
@@ -553,6 +663,18 @@ function startSubscriptions() {
     const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
     audit = a; refresh("security");
   }, warn("audit"));
+
+  /* QR Studio persistence — admin-only collection (see firestore.rules), so
+     the generated QR and the PIN survive logout/login and stay identical
+     across every device the admin signs into. */
+  onSnapshot(doc(db, "adminSettings", "qr"), (s) => {
+    qrPersisted = s.exists() ? s.data() : null;
+    refresh("qr");
+  }, warn("qr"));
+  onSnapshot(doc(db, "adminSettings", "security"), (s) => {
+    pinState = s.exists() ? s.data() : null;
+    refresh("security");
+  }, warn("security-pin"));
 
   /* Blessings: the security rules restrict per-document reads, so an admin
      listen is permitted (isAdmin() is document-independent). */
@@ -2143,32 +2265,35 @@ function loadQR() {
   return qrP;
 }
 renderers.qr = function () {
-  const S = visitStats();
   const unlocked = qrUnlocked;
+  const baseUrlNow = (qrPersisted && qrPersisted.baseUrl) || PUBLIC_SITE;
+  if (qrPersisted && qrPersisted.src) qrSrc = qrPersisted.src;
   $("#p-qr").innerHTML =
     card('<h3>ආරාධනා QR කේතය</h3>' +
       '<p class="hint">මෙම QR හරහා පැමිණෙන අය <b>“QR කේතයෙන්”</b> ලෙස වෙන් වෙන්ව ගණන් ගැනේ</p>' +
       '<div class="field"><label for="qr_url">ඉලක්ක ලිපිනය ' +
         (unlocked ? '<span class="pill pend">විවෘත</span>' : '<span class="pill side">🔒 අගුළු දමා ඇත</span>') + '</label>' +
-        '<input class="inp" id="qr_url" value="' + esc(PUBLIC_SITE) + '"' + (unlocked ? '' : ' readonly') + '></div>' +
+        '<input class="inp" id="qr_url" value="' + esc(baseUrlNow) + '"' + (unlocked ? '' : ' readonly') + '></div>' +
       '<label class="diag-toggle" style="margin-bottom:12px"><input type="checkbox" id="qrUnlock"' + (unlocked ? ' checked' : '') + '>' +
-        '<span>ලිපිනය වෙනස් කිරීමට අගුළු අරින්න <i>වැරදි ලිපිනයක් QR එකට යාම වැළැක්වීම සඳහා පෙරනිමියෙන් අගුළු දමා ඇත</i></span></label>' +
+        '<span>ලිපිනය වෙනස් කිරීමට අගුළු අරින්න <i>PIN තහවුරු කිරීමකින් තොරව අගුළු ඇරිය නොහැක — වැරදි ලිපිනයක් QR එකට යාම වැළැක්වීම සඳහා</i></span></label>' +
       '<div class="field"><label for="qr_src">මූලාශ්‍රය</label><select class="inp" id="qr_src">' +
         ['qr', 'card', 'print', 'invite'].map(o => '<option value="' + o + '"' + (o === qrSrc ? ' selected' : '') + '>' + o + '</option>').join("") +
       '</select></div>' +
       '<div class="row" style="margin-bottom:16px">' +
-        '<button class="btn primary sm" id="qrMake" type="button">QR කේතය සාදන්න</button>' +
+        '<button class="btn primary sm" id="qrMake" type="button">' + (qrPersisted ? "QR කේතය නැවත සාදන්න" : "QR කේතය සාදන්න") + '</button>' +
         '<button class="btn sm ghost" id="qrPng" type="button" disabled>PNG සුරකින්න</button>' +
         '<button class="btn sm ghost" id="qrCopy" type="button">සබැඳිය copy</button>' +
       '</div>' +
       '<div class="qr-wrap"><div class="qr-box" id="qrBox"><div class="empty" style="width:210px">QR කේතය මෙහි දිස් වේ</div></div>' +
       '<div class="qr-meta"><label style="font-size:.8rem;font-weight:700;color:var(--mut)">සම්පූර්ණ සබැඳිය</label>' +
-      '<code id="qrLink">' + esc(PUBLIC_SITE + "/?src=" + qrSrc) + '</code>' +
+      '<code id="qrLink">' + esc(baseUrlNow.replace(/\/+$/, "") + "/?src=" + qrSrc) + '</code>' +
       '<p class="hint" style="padding:0;margin-top:12px">මුද්‍රිත ආරාධනා පත්‍රවල මෙය භාවිතා කරන්න. ' +
       'ජංගම දුරකථනයේ <b>PNG සුරකින්න</b> ඔබූ විට share sheet එක හරහා ගැලරියට සුරැකේ. ' +
       'නොහොත් QR රූපය මත <b>දිගටම ඔබා</b> “Save Image” තෝරන්න.</p>' +
-      '<div class="stats" style="margin-top:14px">' + stat(S.by.qr, "QR ස්කෑන්", "gold") + stat(S.by.web, "වෙබ්", "ok") + '</div>' +
-      '<div class="row"><button class="btn sm bad" id="qrReset" type="button">QR ගණන ශුන්‍ය කරන්න</button></div>' +
+      (qrPersisted && qrPersisted.generatedBy
+        ? '<p class="faint" style="font-size:.76rem;margin-top:10px">මෙම QR එක ස්ථිරව සුරැකී ඇත — ' + esc(qrPersisted.generatedBy) +
+          (qrPersisted.generatedAt ? " · " + esc(new Date(qrPersisted.generatedAt).toLocaleString("si-LK")) : "") + '</p>'
+        : "") +
       '</div></div>');
 
   const link = () => {
@@ -2178,8 +2303,17 @@ renderers.qr = function () {
   const paint = () => { $("#qrLink").textContent = link(); };
   $("#qr_url").oninput = paint;
   $("#qr_src").onchange = () => { qrSrc = $("#qr_src").value; paint(); };
-  $("#qrUnlock").onchange = () => { qrUnlocked = $("#qrUnlock").checked; renderers.qr(); };
-  if ($("#qrReset")) $("#qrReset").onclick = () => resetVisits("qr");
+  $("#qrUnlock").onchange = async (e) => {
+    if (e.target.checked) {
+      e.target.checked = false; // reverted until the PIN is verified
+      const ok = await requirePin("ලිපිනය අගුළු හැරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+      if (!ok) return;
+      qrUnlocked = true;
+    } else {
+      qrUnlocked = false;
+    }
+    renderers.qr();
+  };
 
   /* Draw the code onto a canvas ourselves. The library's createDataURL() returns
      a `data:` URL, and iOS Safari ignores the download attribute on those — which
@@ -2222,26 +2356,52 @@ renderers.qr = function () {
     }
   };
 
+  const renderInto = async (url, px1, px2) => {
+    const qrcode = await loadQR();
+    const q = qrcode(0, "M"); q.addData(url); q.make();
+    const view = drawQR(q, px1);
+    view.style.width = "210px"; view.style.height = "210px";
+    view.setAttribute("alt", "Helasiritha QR");
+    $("#qrBox").innerHTML = ""; $("#qrBox").appendChild(view);
+    const big = drawQR(q, px2);
+    $("#qrPng").disabled = false;
+    $("#qrPng").onclick = () => saveCanvas(big);
+  };
+
   $("#qrMake").onclick = async () => {
+    /* Overwriting an already-generated, already-printed QR is the accident
+       this guards against — the very first generation has nothing to
+       overwrite yet, so it doesn't ask. */
+    if (qrPersisted && qrPersisted.url) {
+      const ok = await requirePin("පවතින QR කේතය නැවත සෑදීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න. මෙය මුද්‍රිත ආරාධනා පත්‍ර වල QR එක වෙනස් කරයි.");
+      if (!ok) return;
+    }
     const b = $("#qrMake"); b.disabled = true; b.textContent = "සාදමින්…";
     try {
-      const qrcode = await loadQR();
-      const q = qrcode(0, "M"); q.addData(link()); q.make();
-      const view = drawQR(q, 640);                 /* on-screen: long-press friendly */
-      view.style.width = "210px"; view.style.height = "210px";
-      view.setAttribute("alt", "Helasiritha QR");
-      $("#qrBox").innerHTML = ""; $("#qrBox").appendChild(view);
-      const big = drawQR(q, 1280);                 /* saved file: print quality */
-      $("#qrPng").disabled = false;
-      $("#qrPng").onclick = () => saveCanvas(big);
+      const theUrl = link();
+      await renderInto(theUrl, 640, 1280);
+      await withAudit(setDoc(doc(db, "adminSettings", "qr"), {
+        baseUrl: $("#qr_url").value.trim() || PUBLIC_SITE,
+        src: $("#qr_src").value.trim() || "qr",
+        url: theUrl,
+        generatedAt: Date.now(),
+        generatedBy: (auth.currentUser && auth.currentUser.email) || ""
+      }), "qr.generate", theUrl);
       toast("QR කේතය සාදන ලදී ✓", "ok");
     } catch (e) { toast("QR සෑදීම අසාර්ථකයි — අන්තර්ජාලය පරීක්ෂා කරන්න", "err"); }
-    b.disabled = false; b.textContent = "QR කේතය සාදන්න";
+    b.disabled = false; b.textContent = qrPersisted ? "QR කේතය නැවත සාදන්න" : "QR කේතය සාදන්න";
   };
   $("#qrCopy").onclick = async () => {
     try { await navigator.clipboard.writeText(link()); toast("සබැඳිය copy විය ✓", "ok"); }
     catch (_) { toast("copy කළ නොහැක — අතින් තෝරන්න", "warn"); }
   };
+
+  /* Restore the persisted QR on every render (login, refresh, panel switch) —
+     QR encoding is fully deterministic, so redrawing from the saved URL
+     reproduces the exact same code without storing any image data. */
+  if (qrPersisted && qrPersisted.url) {
+    renderInto(qrPersisted.url, 640, 1280).catch(() => {});
+  }
 };
 
 /* ════════════════════ v2 · SECURITY & AUDIT ════════════════════ */
@@ -2270,6 +2430,17 @@ renderers.security = function () {
         '<span class="faint" style="font-size:.8rem">සැසිය මිනිත්තු ' + mins + 'ක් · අක්‍රීය මිනිත්තු 20කින් ස්වයංක්‍රීයව පිටවේ</span>' +
         '<span class="sp" style="flex:1"></span>' +
         '<button class="btn sm bad" id="secOut" type="button">දැන්ම පිටවෙන්න</button></div>') +
+
+    card('<h3>ආරක්ෂක PIN කළමනාකරණය</h3>' +
+      '<p class="hint">QR කේතය නැවත සෑදීම සහ ඉලක්ක ලිපිනය අගුළු හැරීම ආරක්ෂා කිරීමට මෙම PIN එක භාවිතා වේ — හදිසි click එකකින් මුද්‍රිත QR එක හෝ routing ලිපිනය වෙනස් වීම මෙය වළක්වයි.</p>' +
+      (pinState && pinState.pinHash
+        ? '<div class="row"><span class="pill yes">PIN සකසා ඇත</span>' +
+            '<button class="btn sm ghost" id="pinChange" type="button">PIN වෙනස් කරන්න</button>' +
+            '<button class="btn sm bad" id="pinForgot" type="button">PIN අමතක වුණා</button></div>' +
+          (pinState.updatedAt ? '<p class="faint" style="font-size:.78rem;margin-top:6px">අවසන් වරට වෙනස් කළේ: ' +
+            esc(new Date(pinState.updatedAt).toLocaleString("si-LK")) + (pinState.updatedBy ? " · " + esc(pinState.updatedBy) : "") + '</p>' : "")
+        : '<div class="row"><span class="pill pend">PIN සකසා නැත</span>' +
+            '<button class="btn sm primary" id="pinSet" type="button">PIN එකක් සකසන්න</button></div>')) +
 
     card('<h3>දත්ත උපස්ථය</h3><p class="hint">සම්පූර්ණ මංගල දත්ත JSON ගොනුවක් ලෙස බාගන්න — නිතර ගන්න</p>' +
       '<div class="row"><button class="btn primary sm" id="secBackup" type="button">සම්පූර්ණ උපස්ථය බාගන්න</button>' +
@@ -2377,6 +2548,27 @@ renderers.security = function () {
   $("#secOut").onclick = async () => {
     enteredAt = 0; await signOut(auth).catch(() => {});
     $("#app").hidden = true; $("#login").hidden = false; setBusy(false);
+  };
+  if ($("#pinSet")) $("#pinSet").onclick = async () => {
+    const p = await promptNewPin(); if (p == null) return;
+    await savePin(p);
+  };
+  if ($("#pinChange")) $("#pinChange").onclick = async () => {
+    const ok = await requirePin("වත්මන් PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const p = await promptNewPin(); if (p == null) return;
+    await savePin(p);
+  };
+  if ($("#pinForgot")) $("#pinForgot").onclick = async () => {
+    const sure = await confirmBox(
+      "ඔබගේ Google ගිණුම නැවත තහවුරු කර, PIN එක reset කරන්නද? මෙය පවතින PIN එක සම්පූර්ණයෙන් ඉවත් කර අලුත් එකක් සකසයි.",
+      { danger: false, ok: "ඔව්, ගිණුම තහවුරු කරන්න", title: "PIN reset කරන්න" }
+    );
+    if (!sure) return;
+    try { await reauthenticateWithPopup(auth.currentUser, provider()); }
+    catch (e) { toast("Google තහවුරු කිරීම අසාර්ථකයි — නැවත උත්සාහ කරන්න", "err"); return; }
+    const p = await promptNewPin(); if (p == null) return;
+    await savePin(p);
   };
   $("#secBackup").onclick = () => {
     const payload = {
