@@ -46,15 +46,28 @@ module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
   const CLOUD  = process.env.CLOUDINARY_CLOUD_NAME;
   const KEY    = process.env.CLOUDINARY_API_KEY;
   const SECRET = process.env.CLOUDINARY_API_SECRET;
   const FBKEY  = process.env.FIREBASE_WEB_API_KEY;
+
+  /* The admin panel's own "උඩුගත කිරීම පරීක්ෂා කරන්න" diagnostic (Security
+     panel) GETs this endpoint first to show exactly which environment
+     variable is missing, before it ever tries a real signature. This never
+     reveals a value — only whether each one is present — and needs no auth,
+     since it exposes nothing an attacker couldn't already infer from a 500. */
+  if (req.method === "GET") {
+    res.status(200).json({
+      configured: { cloudName: !!CLOUD, apiKey: !!KEY, apiSecret: !!SECRET, firebaseKey: !!FBKEY },
+      ready: !!(CLOUD && KEY && SECRET && FBKEY)
+    });
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
 
   if (!CLOUD || !KEY || !SECRET || !FBKEY) {
     res.status(500).json({ error: "Server is not configured" });
