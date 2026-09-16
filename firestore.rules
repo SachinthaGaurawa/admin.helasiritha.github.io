@@ -10,7 +10,7 @@ rules_version = '2';
  * collection. It intentionally mirrors the exact collections and shapes
  * app.js (both the admin panel and the public site) already assume:
  *   site/{content|agenda|theme|stats}, gallery, guests, guestsPublic, rsvps,
- *   blessings, visits, audit.
+ *   blessings, visits, audit, adminSettings/{qr|security}.
  *
  * Root administrator is hard-locked to a single Google account, per the
  * project's "single admin" requirement. Nobody else can ever read/write
@@ -48,6 +48,16 @@ service cloud.firestore {
     // liquor, dietary, tableNumber, count). Admin-only, both read and write:
     // this is exactly the private data the public site must never see.
     match /guests/{guestId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── /adminSettings/{qr|security} ─────────────────────────────────────
+    // Admin-panel-only operational state: the persisted QR Studio state
+    // (adminSettings/qr) and the PIN hash+salt guarding it (adminSettings/
+    // security). Deliberately its OWN collection, never under /site/* —
+    // /site/* is publicly readable (the wedding page renders from it), and
+    // a PIN hash must never be reachable by an unauthenticated client.
+    match /adminSettings/{docId} {
       allow read, write: if isAdmin();
     }
 
