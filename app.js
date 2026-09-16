@@ -129,7 +129,7 @@ const CONTENT_DEFAULT = {
   groomPreLine: "මහත්මා සහ එම මැතිනියගේ ආදරණීය පුත් වූ,",
   groomPreLineEn: "the beloved son of Mr. & Mrs.", groomPreLineTa: "அவர்களின் அன்பு மகன்,",
   dateISO: "2028-01-12T09:28:00+05:30",
-  venue: "The Epitome Hotel",
+  venue: "එපිටෝම් හෝටලය", venueEn: "The Epitome Hotel", venueTa: "எபிடோம் ஹோட்டல்",
   venueCity: "කුරුණෑගල", venueCityEn: "Kurunegala", venueCityTa: "குருநாகல்",
   venueMapUrl: "https://www.google.com/maps/search/?api=1&query=The+Epitome+Hotel+Kurunegala",
   ceremonyTime: "පෙ.ව. 09.00 සිට සවස 04.00 දක්වා", ceremonyTimeEn: "9.15 a.m. onwards", ceremonyTimeTa: "மு.ப. 9.15 மணி முதல்",
@@ -887,7 +887,8 @@ renderers.details = function () {
         fld("පෝරු වේලාව", "f_poruwaTime", c.poruwaTime) + '</div>' +
       '<div class="field"><label>ස්වයංක්‍රීය දින පෙළ</label><input class="inp" id="f_datePrev" readonly></div>' +
       tri("ceremonyTime", "උත්සව වේලාව", c.ceremonyTime, c.ceremonyTimeEn, c.ceremonyTimeTa) +
-      '<div class="grid2">' + fld("ස්ථානයේ නම", "f_venue", c.venue) + fld("Google Maps සබැඳිය", "f_venueMapUrl", c.venueMapUrl) + '</div>' +
+      tri("venue", "ස්ථානයේ නම", c.venue, c.venueEn, c.venueTa) +
+      fld("Google Maps සබැඳිය", "f_venueMapUrl", c.venueMapUrl) +
       tri("venueCity", "නගරය", c.venueCity, c.venueCityEn, c.venueCityTa)) +
 
     card('<h3>ආරාධනා සන්නසේ පෙළ</h3><p class="hint">සන්නස (invitation scroll) සඳහා පමණක් · හිස්ව තැබුවොත් පෙරනිමි පෙළ යෙදේ · ' +
@@ -951,7 +952,7 @@ renderers.details = function () {
       brideFatherSi: v("brideFatherSi_"), groomFatherSi: v("groomFatherSi_"),
       dateISO: iso, poruwaTime: v("f_poruwaTime"),
       ceremonyTime: v("ceremonyTimeSi_"), ceremonyTimeEn: v("ceremonyTimeEn_"), ceremonyTimeTa: v("ceremonyTimeTa_"),
-      venue: v("f_venue"), venueMapUrl: v("f_venueMapUrl"),
+      venue: v("venueSi_"), venueEn: v("venueEn_"), venueTa: v("venueTa_"), venueMapUrl: v("f_venueMapUrl"),
       venueCity: v("venueCitySi_"), venueCityEn: v("venueCityEn_"), venueCityTa: v("venueCityTa_"),
       loveNote: v("f_loveNote"), loveSign: v("f_loveSign") || (bSi + " & " + gSi),
       phone: v("f_phone"), whatsapp: v("f_whatsapp"), ambientAudioUrl: v("f_ambientAudioUrl"),
@@ -962,7 +963,7 @@ renderers.details = function () {
       joinSi: v("joinSi_"), joinEn: v("joinEn_"), joinTa: v("joinTa_"),
       sannasaBodySi: v("sannasaBodySi_"), sannasaBodyEn: v("sannasaBodyEn_"), sannasaBodyTa: v("sannasaBodyTa_"),
       poruwaSi: v("poruwaSi_"), poruwaEn: v("poruwaEn_"), poruwaTa: v("poruwaTa_"),
-      venueSi: v("f_venue"), venueEn: v("f_venue"), venueTa: v("f_venue"),
+      venueSi: v("venueSi_"),
       citySi: v("venueCitySi_"), cityEn: v("venueCityEn_"), cityTa: v("venueCityTa_"),
       timeSi: v("ceremonyTimeSi_"), timeEn: v("ceremonyTimeEn_"), timeTa: v("ceremonyTimeTa_"),
       dateSi: ds.si, dateEn: ds.en, dateTa: ds.ta,
