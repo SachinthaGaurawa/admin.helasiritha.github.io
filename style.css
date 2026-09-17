@@ -252,6 +252,15 @@ textarea.inp{ resize:vertical; min-height:82px; line-height:1.6; }
 select.inp{ appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--gold-2) 50%),linear-gradient(135deg,var(--gold-2) 50%,transparent 50%); background-position:calc(100% - 18px) center,calc(100% - 13px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-inline-end:2.2em; }
 .inp::placeholder{ color:var(--faint); }
 input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-scheme:dark; }
+.inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(255,255,255,.015); }
+
+/* ── time-boxed PIN lock bar (මංගල තොරතුරු) ── */
+.lock-bar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 20px; }
+.lock-bar .lock-ic{ font-size:1.3rem; line-height:1; }
+.lock-bar .lock-msg{ flex:1 1 240px; font-size:.86rem; color:var(--mut); }
+.lock-bar .lock-msg b{ color:var(--ink); font-family:var(--f-disp); }
+.lock-bar.locked{ box-shadow:var(--shadow), inset 0 0 0 1px rgba(232,181,75,.35); }
+.lock-bar.unlocked{ box-shadow:var(--shadow), inset 0 0 0 1px rgba(95,207,155,.35); }
 
 /* ── buttons ── */
 .btn{

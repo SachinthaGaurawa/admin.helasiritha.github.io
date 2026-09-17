@@ -222,6 +222,63 @@ async function savePin(newPin) {
   toast("PIN අංකය සුරකින ලදී ✓", "ok");
 }
 
+/* ── මංගල තොරතුරු (details) time-boxed PIN unlock ────────────────────────────
+   Unlike the one-shot PIN checks above (address field, QR regenerate), this
+   whole tab is locked by default and stays that way — a correct PIN opens it
+   for exactly DETAILS_UNLOCK_MS, with a live countdown, and it re-locks itself
+   the instant that runs out (not just "until you leave the tab"), forcing a
+   fresh PIN entry to keep editing. detailsUnlockUntil is an absolute wall-clock
+   deadline (not a tick count) so the countdown stays correct across tab
+   switches, and paintDetailsLock() is called directly rather than through the
+   normal refresh()/renderers.details() cycle, so the ticking clock never
+   fights the "don't re-render under the admin's cursor" guard in refresh(). */
+const DETAILS_UNLOCK_MS = 10 * 60 * 1000;
+let detailsUnlockUntil = 0;
+let detailsLockTick = null;
+
+function detailsLocked() { return !(Date.now() < detailsUnlockUntil); }
+
+function fmtCountdown(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+
+function paintDetailsLock() {
+  const bar = $("#detailsLockBar");
+  if (!bar) { clearInterval(detailsLockTick); detailsLockTick = null; return; }
+  const locked = detailsLocked();
+  $$("#p-details input, #p-details textarea, #p-details select, #p-details button")
+    .forEach(el => { if (el.id !== "detailsUnlockBtn" && el.id !== "detailsLockBtn") el.disabled = locked; });
+
+  if (locked) {
+    clearInterval(detailsLockTick); detailsLockTick = null;
+    bar.className = "card lock-bar locked";
+    bar.innerHTML =
+      '<span class="lock-ic">🔒</span>' +
+      '<span class="lock-msg">මංගල තොරතුරු වෙනස් කිරීමට අගුළු දමා ඇත — සංස්කරණය කිරීමට PIN අංකය ඇතුළත් කරන්න.</span>' +
+      '<button class="btn sm primary" id="detailsUnlockBtn" type="button">🔓 අගුළු අරින්න</button>';
+    $("#detailsUnlockBtn").onclick = async () => {
+      const ok = await requirePin("මංගල තොරතුරු වෙනස් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+      if (!ok) return;
+      detailsUnlockUntil = Date.now() + DETAILS_UNLOCK_MS;
+      paintDetailsLock();
+      toast("අගුළු ඇරිණි — විනාඩි 10ක් ඇතුළත සංස්කරණය කරන්න", "ok");
+    };
+  } else {
+    bar.className = "card lock-bar unlocked";
+    bar.innerHTML =
+      '<span class="lock-ic">🔓</span>' +
+      '<span class="lock-msg">සංස්කරණයට විවෘතයි — <b id="detailsLockCountdown">' + fmtCountdown(detailsUnlockUntil - Date.now()) + '</b> කින් නැවත ස්වයංක්‍රීයව අගුළු වැටේ</span>' +
+      '<button class="btn sm ghost" id="detailsLockBtn" type="button">දැන් අගුළු දමන්න</button>';
+    $("#detailsLockBtn").onclick = () => { detailsUnlockUntil = 0; paintDetailsLock(); toast("මංගල තොරතුරු අගුළු දමන ලදී", "ok"); };
+    clearInterval(detailsLockTick);
+    detailsLockTick = setInterval(() => {
+      if (detailsLocked()) { paintDetailsLock(); toast("කාලය අවසන් — මංගල තොරතුරු ස්වයංක්‍රීයව අගුළු දමන ලදී", "warn"); return; }
+      const cd = $("#detailsLockCountdown"); if (cd) cd.textContent = fmtCountdown(detailsUnlockUntil - Date.now());
+    }, 1000);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    CONTRACT DEFAULTS — mirror the public site byte-for-byte so the editor always
    shows the real current text even before the first Firestore save exists.
@@ -994,6 +1051,7 @@ renderers.details = function () {
       fld(label + " (English)", base + "En_", en, type) + fld(label + " (தமிழ்)", base + "Ta_", ta, type) + '</div>';
 
   $("#p-details").innerHTML =
+    '<div class="card lock-bar" id="detailsLockBar"></div>' +
     card('<h3>මනාල යුවළ</h3><p class="hint">මනාලිය මුලින් · තුන් භාෂාවෙන්ම (පොදු පිටුව + සන්නස දෙකටම යෙදේ)</p>' +
       tri("brideName", "මනාලියගේ නම", c.brideName, c.brideNameEn, c.brideNameTa) +
       tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa) +
@@ -1120,6 +1178,8 @@ renderers.details = function () {
     try { await saveContent({ heroImageUrl: "" }); toast("පෙරනිමි චිත්‍රයට හරවන ලදී", "ok"); }
     catch (e) { toast("දෝෂයකි", "err"); }
   };
+
+  paintDetailsLock();
 };
 
 /* ════════════════════════ 3 · GUEST MANAGEMENT ═════════════════════════════ */
