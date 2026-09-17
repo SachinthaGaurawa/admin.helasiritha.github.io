@@ -1033,7 +1033,7 @@ renderers.details = function () {
       '<div class="sannasa-preview" id="sannasaPreviewWrap"><div class="sannasa-preview-head">' +
         '<span>සජීවී පෙරදසුන · Live Preview</span>' +
         '<a href="https://helasiritha.vercel.app/sannasa.html" target="_blank" rel="noopener">නව ටැබ් එකෙන් ↗</a>' +
-      '</div><iframe class="sannasa-preview-frame" id="sannasaPreviewFrame" src="https://helasiritha.vercel.app/sannasa.html" title="සන්නස පෙරදසුන" loading="lazy"></iframe></div>') +
+      '</div><iframe class="sannasa-preview-frame" id="sannasaPreviewFrame" src="https://helasiritha.vercel.app/sannasa.html" title="සන්නස පෙරදසුන"></iframe></div>') +
 
     card('<h3>ආදර සටහන හා සම්බන්ධතා</h3>' +
       fld("ආදර සටහන (Love Note)", "f_loveNote", c.loveNote, "textarea") +
