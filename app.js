@@ -304,7 +304,16 @@ const CONTENT_DEFAULT = {
   loveSign: "කෞශානි & ගෞරව",
   phone: "", whatsapp: "", ambientAudioUrl: "",
   rsvpOpen: true,
-  show: { countdown: true, agenda: true, gallery: true, lovenote: true, blessings: true, rsvp: true }
+  show: { countdown: true, agenda: true, gallery: true, lovenote: true, blessings: true, rsvp: true },
+  /* Post-wedding "Thank You" lockdown. postWeddingMode is the manual master
+     switch; postWeddingScheduleAt (an SLT ISO string, same "+05:30"-suffixed
+     format as dateISO — see fromLocalInput) is an alternate, independent
+     trigger: once that moment passes the public site treats the mode as
+     active even if this flag itself is still false. Both are cleared
+     together on "restore the normal site" so a past-due schedule can never
+     silently keep the lockdown on after an admin thinks they've turned it
+     off — see renderers.postwedding's pwOff handler. */
+  postWeddingMode: false, postWeddingScheduleAt: "", postWeddingMessage: ""
 };
 /* Invitation-scroll (සන්නස) overrides — the iframe reads live[key + Si|En|Ta] */
 const SANNASA_KEYS = [
@@ -669,7 +678,7 @@ function startSubscriptions() {
     content = Object.assign({}, CONTENT_DEFAULT, d);
     content.show = Object.assign({}, CONTENT_DEFAULT.show, d.show || {});
     netState(s.metadata);
-    refresh("details"); refresh("visibility"); refresh("dashboard");
+    refresh("details"); refresh("visibility"); refresh("dashboard"); refresh("postwedding");
   }, warn("content"));
 
   onSnapshot(doc(db, "site", "agenda"), (s) => {
@@ -873,7 +882,8 @@ const ICONS = {
   table:"M3 5h18v14H3zM3 10h18M9 5v14",
   chart:"M3 3v18h18M7 15l3-4 3 3 5-7",
   qr:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 20h1M17 20v1",
-  shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"
+  shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
+  gift:"M12 8V21M12 8a2.5 2.5 0 10-2.5-2.5A2.5 2.5 0 0012 8zM12 8a2.5 2.5 0 102.5-2.5A2.5 2.5 0 0012 8zM3 12h18v3H3zM4 15h16v6H4z"
 };
 const NAV = [
   { group: "මූලික",   items: [
@@ -900,6 +910,9 @@ const NAV = [
   ]},
   { group: "ආරක්ෂාව",  items: [
     { key: "security",   label: "ආරක්ෂාව හා සටහන්",   icon: "shield" }
+  ]},
+  { group: "විවාහයෙන් පසු", items: [
+    { key: "postwedding", label: "ස්තූති තිර මාදිලිය", icon: "gift" }
   ]}
 ];
 const TITLES = {
@@ -915,7 +928,8 @@ const TITLES = {
   theme:      ["වර්ණ සැකසුම්", "පොදු අඩවියේ වර්ණ තේමාව"],
   analytics:  ["පැමිණීම් විශ්ලේෂණය", "QR · වෙබ් · සෘජු පැමිණීම් සජීවීව"],
   qr:         ["QR කේත මධ්‍යස්ථානය", "ආරාධනා QR කේත සාදා බාගන්න"],
-  security:   ["ආරක්ෂාව හා සටහන්", "පිවිසුම් තත්ත්වය සහ පරිපාලන ක්‍රියා සටහන"]
+  security:   ["ආරක්ෂාව හා සටහන්", "පිවිසුම් තත්ත්වය සහ පරිපාලන ක්‍රියා සටහන"],
+  postwedding: ["ස්තූති තිර මාදිලිය", "විවාහයෙන් පසු පොදු අඩවිය අගුළු දමා ස්තූති පණිවිඩය පමණක් පෙන්වීම"]
 };
 const svg = (k) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (ICONS[k] || ICONS.grid) + '"/></svg>';
 
@@ -2665,6 +2679,123 @@ renderers.security = function () {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     logAudit("backup.download", dayKey(Date.now()));
     toast("උපස්ථය බාගත විය ✓", "ok");
+  };
+};
+
+/* ════════════════════ POST-WEDDING "THANK YOU" MODE ════════════════════════
+   A master lockdown switch for the public site, meant for use once the
+   wedding itself is over: RSVP/Sannasa/Agenda/Gallery/Blessings all stop
+   being relevant, and the site should show one static "ස්තූතියි" screen
+   instead. Two independent triggers combine on the public site (see its own
+   isPostWeddingActive() in app.js there): the manual postWeddingMode flag
+   below, OR a scheduled SLT moment (postWeddingScheduleAt, stored the exact
+   same "+05:30"-suffixed ISO format as dateISO — see fromLocalInput above)
+   once it has passed — whichever is true first. Every state-changing action
+   here (activate, schedule, restore) requires the same Security PIN as the
+   QR Studio (requirePin()) plus one extra confirmation, since this is far
+   more consequential than an ordinary content edit: it takes the whole
+   public site offline for every visitor at once. "Restore the normal site"
+   always clears BOTH fields together, so a past-due schedule can never
+   silently keep the lockdown on after an admin thinks they've turned it
+   off by clicking only the manual switch. */
+renderers.postwedding = function () {
+  const c = content;
+  const now = Date.now();
+  const schedTs = c.postWeddingScheduleAt ? new Date(c.postWeddingScheduleAt).getTime() : 0;
+  const schedValid = schedTs && !isNaN(schedTs);
+  const schedPassed = schedValid && now >= schedTs;
+  const effectiveActive = !!c.postWeddingMode || schedPassed;
+  const fmtSLT = (ts) => new Date(ts).toLocaleString("si-LK", { timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short" });
+
+  const statusLine = effectiveActive
+    ? (c.postWeddingMode
+        ? '<span class="pill no">සක්‍රියයි — අතින් සක්‍රිය කර ඇත</span>'
+        : '<span class="pill no">සක්‍රියයි — සැලසුම් වේලාව පසුවී ඇත</span>')
+    : (schedValid
+        ? '<span class="pill pend">සැලසුම් කර ඇත — ' + esc(fmtSLT(schedTs)) + ' (ශ්‍රී ලංකා වේලාව) ට සක්‍රිය වේ</span>'
+        : '<span class="pill yes">අක්‍රියයි — සාමාන්‍ය අඩවිය පෙන්වයි</span>');
+
+  $("#p-postwedding").innerHTML =
+    card('<h3>වත්මන් තත්ත්වය</h3><p class="hint">පොදු අඩවිය මෙම තත්ත්වය සජීවීව අනුගමනය කරයි — වෙනසක් සිදු වූ ගමන්ම සියලුම අමුත්තන්ට යෙදේ</p>' +
+      '<div class="row">' + statusLine + '</div>') +
+
+    card('<h3>අතින් සක්‍රිය/අක්‍රිය කිරීම</h3>' +
+      '<p class="hint">සක්‍රිය කළ විට, පොදු අඩවියේ Sannasa/RSVP/වැඩසටහන/ඡායාරූප/සුබ පැතුම් සියල්ල වහාම සැඟවී, scroll කිරීම වසා දමා, "ස්තූතියි" තිරය පමණක් පෙන්වයි.</p>' +
+      '<div class="row">' +
+        '<button class="btn bad" id="pwOn" type="button"' + (c.postWeddingMode ? " disabled" : "") + '>දැන්ම සක්‍රිය කරන්න</button>' +
+        '<button class="btn ghost" id="pwOff" type="button">අක්‍රිය කර සාමාන්‍ය අඩවියට හරවන්න</button>' +
+      '</div>') +
+
+    card('<h3>නියමිත වේලාවකට සක්‍රිය කිරීම (ශ්‍රී ලංකා වේලාව)</h3>' +
+      '<p class="hint">මෙම වේලාව පැමිණි විට, පොදු අඩවිය ස්වයංක්‍රීයව ස්තූති තිරයට මාරු වේ — දැනටමත් අඩවියේ සිටින අමුත්තෙකුටද මෙය බලපායි, පිටුව නැවත load කිරීමක් අවශ්‍ය නැත</p>' +
+      '<div class="grid2">' + fld("සක්‍රිය කරන දිනය හා වේලාව", "f_pwSched", toLocalInput(c.postWeddingScheduleAt), "datetime-local") + '</div>' +
+      '<div class="row">' +
+        '<button class="btn primary" id="pwSchedSave" type="button">සැලසුම සුරකින්න</button>' +
+        (c.postWeddingScheduleAt ? '<button class="btn sm ghost" id="pwSchedClear" type="button">සැලසුම ඉවත් කරන්න</button>' : "") +
+      '</div>') +
+
+    card('<h3>ස්තූති පණිවිඩය</h3><p class="hint">මෙම තිරය සම්පූර්ණයෙන්ම සිංහලෙන් පමණි — English/தமிழ் භාෂා මාරුව මෙයට බලපාන්නේ නැත</p>' +
+      fld("පණිවිඩය", "f_pwMsg", c.postWeddingMessage || "", "textarea") +
+      '<div class="row"><button class="btn primary" id="pwMsgSave" type="button">පණිවිඩය සුරකින්න</button>' +
+      '<span class="saved" id="pwMsgSaved">✓ සුරැකිණි</span></div>');
+
+  $("#pwOn").onclick = async () => {
+    const ok = await requirePin("ස්තූති තිර මාදිලිය දැන්ම සක්‍රිය කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const sure = await confirmBox(
+      "පොදු අඩවිය දැන්ම සම්පූර්ණයෙන් අගුළු දමා, Sannasa/RSVP/වැඩසටහන/ඡායාරූප/සුබ පැතුම් සියල්ල සැඟවෙනු ඇත. මෙය සියලුම අමුත්තන්ට වහාම බලපායි. ඉදිරියට යන්නද?",
+      { ok: "ඔව්, දැන්ම සක්‍රිය කරන්න", title: "ස්තූති තිරය සක්‍රිය කරන්න" }
+    );
+    if (!sure) return;
+    try { await saveContent({ postWeddingMode: true }); toast("ස්තූති තිර මාදිලිය සක්‍රියයි ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  $("#pwOff").onclick = async () => {
+    const ok = await requirePin("සාමාන්‍ය අඩවියට හැරවීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const sure = await confirmBox(
+      "ස්තූති තිර මාදිලිය අක්‍රිය කර, පොදු අඩවිය සාමාන්‍ය පරිදි (Sannasa/RSVP/වැඩසටහන/ඡායාරූප) නැවත පෙන්වන්නද? සකසා තිබූ ඕනෑම කාල සැලසුමක්ද ඉවත් වේ.",
+      { danger: false, ok: "ඔව්, සාමාන්‍ය අඩවියට හරවන්න", title: "සාමාන්‍ය අඩවියට හරවන්න" }
+    );
+    if (!sure) return;
+    try { await saveContent({ postWeddingMode: false, postWeddingScheduleAt: "" }); toast("සාමාන්‍ය අඩවියට හැරවිණි ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  $("#pwSchedSave").onclick = async () => {
+    const raw = $("#f_pwSched").value;
+    if (!raw) { toast("දිනයක් හා වේලාවක් තෝරන්න", "warn"); return; }
+    const iso = raw + ":00+05:30";
+    const ts = new Date(iso).getTime();
+    if (isNaN(ts)) { toast("වැරදි දිනයක්/වේලාවක්", "err"); return; }
+    const ok = await requirePin("සක්‍රිය කිරීමේ කාල සැලසුම වෙනස් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const sure = await confirmBox(
+      ts <= Date.now()
+        ? "ඔබ තෝරාගත් වේලාව දැනටමත් අතීතයේය — සුරැකූ වහාම පොදු අඩවිය ස්තූති තිරයට මාරු වේ. ඉදිරියට යන්නද?"
+        : (fmtSLT(ts) + " (ශ්‍රී ලංකා වේලාව) ට පොදු අඩවිය ස්වයංක්‍රීයව ස්තූති තිරයට මාරු වන පරිදි සැලසුම් කරන්නද?"),
+      { ok: "ඔව්, සැලසුම සුරකින්න", title: "සක්‍රිය කිරීමේ කාලය සැලසුම් කරන්න" }
+    );
+    if (!sure) return;
+    try { await saveContent({ postWeddingScheduleAt: iso }); toast("සැලසුම සුරැකිණි ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  if ($("#pwSchedClear")) $("#pwSchedClear").onclick = async () => {
+    const ok = await requirePin("සැලසුම ඉවත් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    try { await saveContent({ postWeddingScheduleAt: "" }); toast("සැලසුම ඉවත් කරන ලදී ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  $("#pwMsgSave").onclick = async () => {
+    const btn = $("#pwMsgSave"); btn.disabled = true;
+    try {
+      await saveContent({ postWeddingMessage: $("#f_pwMsg").value.trim() });
+      const s = $("#pwMsgSaved"); if (s) { s.classList.add("show"); setTimeout(() => s.classList.remove("show"), 2000); }
+    } catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+    btn.disabled = false;
   };
 };
 
