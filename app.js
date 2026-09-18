@@ -304,7 +304,7 @@ const CONTENT_DEFAULT = {
   loveSign: "කෞශානි & ගෞරව",
   phone: "", whatsapp: "", ambientAudioUrl: "",
   rsvpOpen: true,
-  show: { countdown: true, agenda: true, gallery: true, lovenote: true, lamp: true, blessings: true, rsvp: true }
+  show: { countdown: true, agenda: true, gallery: true, lovenote: true, blessings: true, rsvp: true }
 };
 /* Invitation-scroll (සන්නස) overrides — the iframe reads live[key + Si|En|Ta] */
 const SANNASA_KEYS = [
@@ -342,7 +342,6 @@ const VIS_FIELDS = [
   ["agenda",    "වැඩසටහන",            "උත්සව කාලසටහන", false],
   ["gallery",   "ඡායාරූප එකතුව",       "Moments of Love ගැලරිය", false],
   ["lovenote",  "ආදර සටහන",           "පිටුව පහළ විශේෂ සටහන", false],
-  ["lamp",      "මංගල පහන",           "තහවුරු වූ ආගන්තුක ගණන", false],
   ["blessings", "සුබ පැතුම් පුවරුව",   "අනුමත සුබ පැතුම්", false],
   ["rsvp",      "RSVP කොටස",          "පැමිණීම තහවුරු කිරීමේ කොටස", false]
 ];
@@ -704,7 +703,6 @@ function startSubscriptions() {
     const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
     rsvps = a;
     rsvpMap = {}; a.forEach(r => { rsvpMap[r.guestId || r.id] = r; });
-    pushStats();
     refresh("rsvp"); refresh("guests"); refresh("seating"); refresh("dashboard");
   }, warn("rsvps"));
 
@@ -740,18 +738,6 @@ function startSubscriptions() {
     a.sort((x, y) => (((y.ts && y.ts.seconds) || 0) - ((x.ts && x.ts.seconds) || 0)));
     blessings = a; refresh("blessings"); refresh("dashboard"); paintBadge();
   }, warn("blessings"));
-}
-/* Publish the confirmed head-count the public "මංගල පහන" counter reads. */
-let statsT, lastStats = null;
-function pushStats() {
-  clearTimeout(statsT);
-  statsT = setTimeout(async () => {
-    const n = headcount();
-    if (n === lastStats) return;
-    lastStats = n;
-    try { await setDoc(doc(db, "site", "stats"), { confirmedCount: n, updatedAt: Date.now() }, { merge: true }); }
-    catch (e) { console.warn("stats write", e); }
-  }, 900);
 }
 function paintBadge() {
   const pend = blessings.filter(b => !b.approved).length;
@@ -1028,7 +1014,6 @@ renderers.dashboard = function () {
         '<button class="btn sm" data-jump="rsvp">පිළිතුරු බලන්න</button>' +
         '<button class="btn sm ghost" data-jump="guests">ආගන්තුකයන්</button>' +
         '<button class="btn sm ghost" data-jump="seating">ආසන (' + seated + '/' + confirmed.length + ')</button>' +
-        '<button class="btn sm ghost" id="reStats">පහන ගණන යළි ගණනය</button>' +
       '</div>') +
     card('<h3>පාර්ශව අනුව</h3><p class="hint">මනාලිය සහ මනාලයාගේ ආරාධිත බෙදීම</p>' +
       '<div class="split">' + sideCol("කෞශානි · මනාලිය", bride) + sideCol("ගෞරව · මනාලයා", groom) + '</div>') +
@@ -1042,11 +1027,10 @@ renderers.dashboard = function () {
       '<div class="stats" style="margin:0">' +
         stat(gallery.length, "ඡායාරූප") + stat(agenda.length, "වැඩසටහන් අංග") +
         stat(blessings.filter(b => b.approved).length, "අනුමත සුබ පැතුම්") +
-        stat(Object.values(content.show || {}).filter(Boolean).length + "/7", "දෘශ්‍ය කොටස්") +
+        stat(Object.values(content.show || {}).filter(Boolean).length + "/6", "දෘශ්‍ය කොටස්") +
       '</div>');
 
   $$("[data-jump]", $("#p-dashboard")).forEach(b => b.onclick = () => go(b.dataset.jump));
-  $("#reStats").onclick = async () => { lastStats = null; pushStats(); toast("පහනේ ගණන යාවත්කාලීන විය", "ok"); };
 };
 
 /* ════════════════════════ 2 · WEDDING DETAILS ══════════════════════════════ */
