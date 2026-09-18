@@ -810,7 +810,13 @@ function updGuest(id, o) {
   if ("name" in o) pub.name = o.name || "";
   if ("family" in o) pub.family = o.family || "";
   if ("side" in o) pub.side = o.side || "";
-  return Object.keys(pub).length ? p.then(() => setDoc(doc(db, "guestsPublic", id), pub, { merge: true })) : p;
+  /* Both the primary write and the guestsPublic mirror (when name/family/side
+     changed) are chained into ONE promise, so a caller's .catch sees a
+     failure in either — previously the mirror write's own failure was
+     invisible (nothing awaited or checked it), silently drifting the public
+     search directory out of sync with the real guest record. */
+  const full = Object.keys(pub).length ? p.then(() => setDoc(doc(db, "guestsPublic", id), pub, { merge: true })) : p;
+  return withAudit(full, "guest.update", id);
 }
 function delGuest(id) {
   const batch = writeBatch(db);
@@ -818,17 +824,17 @@ function delGuest(id) {
   batch.delete(doc(db, "guestsPublic", id));
   return withAudit(batch.commit(), "guest.delete", id);
 }
-const addGalleryItem = (o)  => addDoc(collection(db, "gallery"), Object.assign({ ts: serverTimestamp() }, o));
-const updGallery  = (id, o) => updateDoc(doc(db, "gallery", id), o);
+const addGalleryItem = (o)  => withAudit(addDoc(collection(db, "gallery"), Object.assign({ ts: serverTimestamp() }, o)), "gallery.add", o.caption || "");
+const updGallery  = (id, o) => withAudit(updateDoc(doc(db, "gallery", id), o), "gallery.update", id);
 const delGallery  = (id)    => withAudit(deleteDoc(doc(db, "gallery", id)), "gallery.delete", id);
 const updBlessing = (id, o) => withAudit(updateDoc(doc(db, "blessings", id), o), "blessing." + (o.approved ? "approve" : "hide"), id);
 const delBlessing = (id)    => withAudit(deleteDoc(doc(db, "blessings", id)), "blessing.delete", id);
-const delRsvp     = (id)    => deleteDoc(doc(db, "rsvps", id));
+const delRsvp     = (id)    => withAudit(deleteDoc(doc(db, "rsvps", id)), "rsvp.delete", id);
 function setRsvp(g, patch) {
-  return setDoc(doc(db, "rsvps", g.id), Object.assign({
+  return withAudit(setDoc(doc(db, "rsvps", g.id), Object.assign({
     guestId: g.id, name: g.name || "", family: g.family || "", side: g.side || "",
     ts: serverTimestamp()
-  }, patch), { merge: true });
+  }, patch), { merge: true }), "rsvp.set", g.id);
 }
 
 /* ── Cloudinary unsigned upload (client-side downscale first) ─────────────── */
@@ -1270,12 +1276,18 @@ renderers.guests = function () {
   };
 
   const bind = (sel, fn, ev) => $$(sel, $("#p-guests")).forEach(el => el[ev || "onchange"] = () => fn(el));
-  bind(".k-name", el => updGuest(el.dataset.id, { name: el.value.trim() }).then(() => toast("නම යාවත්කාලීනයි", "ok")));
-  bind(".k-fam",  el => updGuest(el.dataset.id, { family: el.value.trim() }).then(() => toast("පවුල යාවත්කාලීනයි", "ok")));
-  bind(".k-side", el => updGuest(el.dataset.id, { side: el.value }).then(() => toast("පාර්ශවය යාවත්කාලීනයි", "ok")));
-  bind(".k-count", el => updGuest(el.dataset.id, { count: clampInt(el.value, 1, 40) }).then(() => toast("ගණන යාවත්කාලීනයි", "ok")));
-  bind(".k-diet", el => updGuest(el.dataset.id, { dietary: el.value.trim() }).then(() => toast("යාවත්කාලීනයි", "ok")));
-  bind(".k-table", el => { const v = el.value ? clampInt(el.value, 1, 99) : null; updGuest(el.dataset.id, { tableNumber: v }).then(() => toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok")); });
+  /* Every one of these was missing a .catch — a failed write (offline,
+     permission-denied, a transient Firestore error) surfaced no toast, and
+     since these are plain <input>s never re-synced from a failed write,
+     the field kept showing whatever the admin typed — LOOKING saved while
+     silently not being. .k-status/.k-liq below already got this right;
+     matched that same try/catch + error-toast pattern here. */
+  bind(".k-name", async el => { try { await updGuest(el.dataset.id, { name: el.value.trim() }); toast("නම යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  bind(".k-fam",  async el => { try { await updGuest(el.dataset.id, { family: el.value.trim() }); toast("පවුල යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  bind(".k-side", async el => { try { await updGuest(el.dataset.id, { side: el.value }); toast("පාර්ශවය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  bind(".k-count", async el => { try { await updGuest(el.dataset.id, { count: clampInt(el.value, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  bind(".k-diet", async el => { try { await updGuest(el.dataset.id, { dietary: el.value.trim() }); toast("යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  bind(".k-table", async el => { const v = el.value ? clampInt(el.value, 1, 99) : null; try { await updGuest(el.dataset.id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-status", async el => {
     const g = effGuests().find(x => x.id === el.dataset.id); if (!g) return;
     const st = el.value;
@@ -1300,6 +1312,29 @@ renderers.guests = function () {
   });
 
   /* ── bulk import ── */
+  /* The naive /[,\t;]/ split used below corrupted any field whose value
+     legitimately contained the delimiter inside quotes — e.g. a family/city
+     field pasted as "Perera, Colombo" was split into an extra column,
+     silently misaligning count/side for that row (clampInt on the wrong
+     cell often just defaulted to 1 with no error raised). This respects
+     quoted fields the way Excel/Sheets/Numbers actually export CSV: a
+     "..." field can contain the delimiter, and "" inside quotes is a
+     literal quote. */
+  function splitDelimited(line, delim) {
+    const out = []; let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQ) {
+        if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else { inQ = false; } }
+        else cur += c;
+      } else if (c === '"' && cur === "") { inQ = true; }
+      else if (c === delim) { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  }
+  const detectDelim = (line) => line.indexOf("\t") !== -1 ? "\t" : (line.indexOf(";") !== -1 && line.indexOf(",") === -1) ? ";" : ",";
   const rowsFrom = (matrix) => {
     if (!matrix || !matrix.length) return [];
     let start = 0;
@@ -1341,15 +1376,19 @@ renderers.guests = function () {
     } catch (e) { toast("ආයාතය අසාර්ථකයි: " + (e.message || e), "err"); }
     btn.disabled = false; btn.textContent = "ලැයිස්තුව ආයාත කරන්න";
   };
-  $("#bkAdd").onclick = () => importRows(rowsFrom(
-    $("#bk_text").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.split(/[,\t;]/).map(s => s.trim()))
-  ));
+  $("#bkAdd").onclick = () => {
+    const lines = $("#bk_text").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const delim = lines.length ? detectDelim(lines[0]) : ",";
+    importRows(rowsFrom(lines.map(l => splitDelimited(l, delim))));
+  };
   $("#bk_file").onchange = async () => {
     const f = $("#bk_file").files && $("#bk_file").files[0]; if (!f) return;
     try {
       let matrix;
       if (/\.csv$/i.test(f.name)) {
-        matrix = (await f.text()).split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.split(/[,\t;]/).map(s => s.replace(/^"|"$/g, "").trim()));
+        const lines = (await f.text()).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const delim = lines.length ? detectDelim(lines[0]) : ",";
+        matrix = lines.map(l => splitDelimited(l, delim));
       } else {
         const X = await loadXLSX();
         const wb = X.read(await f.arrayBuffer(), { type: "array" });
