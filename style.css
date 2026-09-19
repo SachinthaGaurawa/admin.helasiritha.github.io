@@ -519,7 +519,14 @@ input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-
 @media (max-width:768px){
   body{ font-size:14.5px; }
   #main{ padding:16px 14px 30px; }
-  .topbar{ padding:12px 14px; }
+  /* A long panel title/subtitle plus 2-3 status pills and the "පොදු අඩවිය"
+     link never fit one row at phone widths without wrapping -- forcing
+     .tt onto its own full-width row (flex-basis:100%) sends everything
+     after it in DOM order to a clean second row instead of every item
+     silently shrinking below its content size and spilling text over
+     its neighbours. */
+  .topbar{ padding:12px 14px; flex-wrap:wrap; row-gap:8px; }
+  .topbar .tt{ flex:1 1 100%; }
   .topbar h2{ font-size:1.04rem; }
   .card{ padding:17px 15px; border-radius:var(--r-md); }
   .grid2,.grid3{ grid-template-columns:1fr; }
