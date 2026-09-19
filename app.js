@@ -17,7 +17,7 @@ import {
   onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, reauthenticateWithPopup
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, doc, collection, onSnapshot, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   writeBatch, serverTimestamp, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -561,26 +561,88 @@ let rejecting = false, enteredAt = 0;
 async function rejectIntruder(reason) {
   if (rejecting) return; rejecting = true;
   try { await signOut(auth); } catch (_) {}
+  clearPinVerified();
   $("#app").hidden = true; $("#login").hidden = false;
   setBusy(false); loginHint("");
   loginError(authMsg(reason));
   setTimeout(() => { rejecting = false; }, 1500);
 }
 
+/* ── SECOND FACTOR: PIN required at login, on top of Google OAuth ───────────
+   Google sign-in alone only proves "this browser is signed into the one
+   allowed Google account" — on a shared/borrowed device, or a laptop with a
+   saved session, that is not the same as proving it's actually the admin
+   sitting there. Reuses the exact same PIN store the Security panel already
+   manages (adminSettings/security), so there is one PIN to remember, not a
+   second parallel one. Verified once per browser TAB via sessionStorage: a
+   reload keeps the tab unlocked, but a new tab or a fresh sign-in demands
+   the PIN again, and it is deliberately never asked before Google auth has
+   already succeeded (a PIN alone, without a valid admin Google session,
+   proves nothing against Firestore rules anyway). */
+const PIN_VERIFIED_KEY = "hs_pin_verified";
+function pinVerifiedThisTab() {
+  try { return sessionStorage.getItem(PIN_VERIFIED_KEY) === "1"; } catch (_) { return false; }
+}
+function clearPinVerified() {
+  try { sessionStorage.removeItem(PIN_VERIFIED_KEY); } catch (_) {}
+}
+async function gateWithLoginPin() {
+  let sec = null;
+  try {
+    const snap = await getDoc(doc(db, "adminSettings", "security"));
+    sec = snap.exists() ? snap.data() : null;
+  } catch (_) { sec = null; }
+  /* No PIN configured yet: let the admin in so they CAN set one up in
+     Security -- refusing entry here would be a permanent, un-recoverable
+     lockout for a brand-new install, which is worse than the gap it closes. */
+  if (!sec || !sec.pinHash) return true;
+
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    setBusy(false);
+    const entered = await pinPrompt("Google පිවිසුම තහවුරුයි. දිගටම කරගෙන යාමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (entered == null) { await signOut(auth).catch(() => {}); return false; }
+    const hash = await hashPin(entered, sec.pinSalt);
+    if (hash === sec.pinHash) {
+      try { sessionStorage.setItem(PIN_VERIFIED_KEY, "1"); } catch (_) {}
+      return true;
+    }
+    if (attempt < 5) {
+      toast("වැරදි PIN අංකයක් (උත්සාහයන් " + (5 - attempt) + "ක් ඉතිරිය)", "err");
+      await new Promise((r) => setTimeout(r, 500 * attempt));   /* light brute-force backoff */
+    }
+  }
+  loginError("PIN උත්සාහයන් 5ක්ම අසාර්ථකයි — ආරක්ෂාව සඳහා පිටවිය.");
+  await signOut(auth).catch(() => {});
+  return false;
+}
+
 /* Single, idempotent entry point into the panel. Reachable from THREE
    independent signals — popup result, redirect result, auth listener — so no
-   single browser quirk can leave the administrator stranded on the gate. */
-function enterPanel(user) {
+   single browser quirk can leave the administrator stranded on the gate.
+   `entering` de-dupes those three signals arriving concurrently: without it,
+   two of them landing while the PIN prompt from the first is still open
+   would show the prompt twice over each other. */
+let entering = false;
+async function enterPanel(user) {
   if (!user) return;
   if (!isAdminEmail(user.email)) { rejectIntruder("auth/not-admin"); return; }
   if (user.emailVerified === false) { rejectIntruder("auth/unverified"); return; }
-  setBusy(false); loginHint(""); loginError("");
-  $("#login").hidden = true; $("#app").hidden = false;
-  $("#whoEmail").textContent = user.email || "";
-  enteredAt = Date.now();
-  sessionStart = Date.now(); lastActivity = Date.now();
-  if (!subsStarted) { subsStarted = true; startSubscriptions(); buildNav(); }
-  go(current);
+  if (entering || !$("#app").hidden) return;
+  entering = true;
+  try {
+    if (!pinVerifiedThisTab()) {
+      setBusy(true, "ආරක්ෂක PIN තහවුරු කරමින්…");
+      const ok = await gateWithLoginPin();
+      if (!ok) { setBusy(false); return; }
+    }
+    setBusy(false); loginHint(""); loginError("");
+    $("#login").hidden = true; $("#app").hidden = false;
+    $("#whoEmail").textContent = user.email || "";
+    enteredAt = Date.now();
+    sessionStart = Date.now(); lastActivity = Date.now();
+    if (!subsStarted) { subsStarted = true; startSubscriptions(); buildNav(); }
+    go(current);
+  } finally { entering = false; }
 }
 
 /* ── SIGN IN — popup on every device, redirect only as a genuine fallback ──── */
@@ -2119,6 +2181,7 @@ $("#googleBtn").addEventListener("click", doGoogleLogin);
 })();
 $("#logoutBtn").addEventListener("click", async () => {
   enteredAt = 0;                                  /* deliberate exit — honour it at once */
+  clearPinVerified();
   await signOut(auth).catch(() => {});
   $("#app").hidden = true; $("#login").hidden = false; setBusy(false);
   toast("පිටවිය.", "ok");
@@ -2566,7 +2629,7 @@ renderers.security = function () {
         '<button class="btn sm bad" id="secOut" type="button">දැන්ම පිටවෙන්න</button></div>') +
 
     card('<h3>ආරක්ෂක PIN කළමනාකරණය</h3>' +
-      '<p class="hint">QR කේතය නැවත සෑදීම සහ ඉලක්ක ලිපිනය අගුළු හැරීම ආරක්ෂා කිරීමට මෙම PIN එක භාවිතා වේ — හදිසි click එකකින් මුද්‍රිත QR එක හෝ routing ලිපිනය වෙනස් වීම මෙය වළක්වයි.</p>' +
+      '<p class="hint">QR කේතය නැවත සෑදීම, ඉලක්ක ලිපිනය අගුළු හැරීම සහ මංගල තොරතුරු සංස්කරණය ආරක්ෂා කිරීමට මෙම PIN එකම භාවිතා වේ. PIN එකක් සකසා ඇත්නම්, Google ගිණුමෙන් පිවිසීමටත් (දෙවන සාධකයක් ලෙස) මෙම PIN එකම අවශ්‍ය වේ — Google session එකක් සොරකම් කළත්, PIN එකකින් තොරව කිසිවෙකුට Dashboard එකට ඇතුළු විය නොහැක.</p>' +
       (pinState && pinState.pinHash
         ? '<div class="row"><span class="pill yes">PIN සකසා ඇත</span>' +
             '<button class="btn sm ghost" id="pinChange" type="button">PIN වෙනස් කරන්න</button>' +
@@ -2916,6 +2979,7 @@ setInterval(() => {
   if (!auth.currentUser) return;
   if (Date.now() - lastActivity > IDLE_LOGOUT_MS) {
     lastActivity = Date.now(); enteredAt = 0;
+    clearPinVerified();
     signOut(auth).catch(() => {});
     $("#app").hidden = true; $("#login").hidden = false;
     toast("අක්‍රීයතාවය නිසා ස්වයංක්‍රීයව පිටවිය", "warn");
