@@ -746,6 +746,25 @@ function netState(meta) {
     : pending ? "වෙනස්කම් යවමින්…" : "Firestore සමඟ සජීවීව සම්බන්ධ";
 }
 function syncState(ok) { if (!ok) { hardOffline = true; } netState(); }
+
+/* This pill answers "is the PUBLIC website up right now?" -- a distinct
+   question from #syncPill (this admin panel's own Firestore connection).
+   The two can disagree in either direction: an admin offline on the train
+   can still have paused the public site earlier, and a live public site
+   doesn't mean this particular admin tab is connected. Always visible
+   (never hidden) since "the site is live" is itself useful, reassuring
+   information, not just a warning for the paused case. */
+function paintSiteStatusBadge() {
+  const p = $("#siteStatusBadge"), t = $("#siteStatusTxt");
+  if (!p || !t) return;
+  const live = content.siteLive !== false;
+  p.classList.toggle("off", !live);
+  t.textContent = live ? "පොදු අඩවිය සක්‍රියයි" : "පොදු අඩවිය අක්‍රියයි";
+  p.title = live
+    ? "පොදු අඩවිය (helasiritha.vercel.app) සියලුම අමුත්තන්ට පෙනේ"
+    : "පොදු අඩවිය තාවකාලිකව අක්‍රියයි — අමුත්තන්ට \"ළඟදීම\" තිරය පමණක් පෙනේ";
+}
+
 function startSubscriptions() {
   const warn = (label) => (err) => { console.warn(label, err); syncState(false); };
 
@@ -755,12 +774,7 @@ function startSubscriptions() {
     content = Object.assign({}, CONTENT_DEFAULT, d);
     content.show = Object.assign({}, CONTENT_DEFAULT.show, d.show || {});
     netState(s.metadata);
-    // Reassurance badge: the public site can be paused (siteLive:false) while
-    // this admin panel and its Firestore connection keep working normally --
-    // shown next to #syncPill so it's never mistaken for the panel itself
-    // being down, on every screen, not just the sitelive panel.
-    const alb = $("#adminActiveBadge");
-    if (alb) alb.hidden = content.siteLive !== false;
+    paintSiteStatusBadge();
     refresh("details"); refresh("visibility"); refresh("dashboard"); refresh("postwedding"); refresh("sitelive");
   }, warn("content"));
 

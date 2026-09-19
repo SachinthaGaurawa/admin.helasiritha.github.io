@@ -173,15 +173,23 @@ button,input,select,textarea{ font-family:inherit; font-size:inherit; color:inhe
 
 /* ── content column ── */
 #content{ display:flex; flex-direction:column; min-width:0; }
+/* Two independent rows (see index.html) instead of one shared flex row --
+   this is deliberate at EVERY viewport width, not just below some phone
+   breakpoint: row2 (status pills + link) can wrap freely within itself on
+   any narrow screen without ever being able to overlap row1 (menu+title),
+   since normal block flow stacks them regardless of how either row's own
+   content happens to size or wrap. No media query can substitute for this
+   -- a breakpoint is a guess at a device width, this is true at all of them. */
 .topbar{
-  position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px;
+  position:sticky; top:0; z-index:20;
   padding:14px 24px; border-bottom:1px solid var(--line-soft);
   background:linear-gradient(180deg, #0b0b10 0%, #0b0b10f2 100%);
 }
-.topbar .tt{ min-width:0; }
+.topbar-row1{ display:flex; align-items:center; gap:14px; }
+.topbar-row2{ display:flex; align-items:center; flex-wrap:wrap; row-gap:8px; column-gap:10px; margin-top:10px; }
+.topbar .tt{ min-width:0; flex:1 1 auto; }
 .topbar h2{ font-family:var(--f-disp); font-size:1.16rem; margin:0; font-weight:700; line-height:1.25; }
 .topbar .ts{ font-size:.78rem; color:var(--faint); }
-.topbar .sp{ flex:1 1 auto; }
 #menuBtn{ display:none; }
 .sync-pill{
   display:inline-flex; align-items:center; gap:7px; padding:.42em .9em; border-radius:99px;
@@ -519,14 +527,7 @@ input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-
 @media (max-width:768px){
   body{ font-size:14.5px; }
   #main{ padding:16px 14px 30px; }
-  /* A long panel title/subtitle plus 2-3 status pills and the "පොදු අඩවිය"
-     link never fit one row at phone widths without wrapping -- forcing
-     .tt onto its own full-width row (flex-basis:100%) sends everything
-     after it in DOM order to a clean second row instead of every item
-     silently shrinking below its content size and spilling text over
-     its neighbours. */
-  .topbar{ padding:12px 14px; flex-wrap:wrap; row-gap:8px; }
-  .topbar .tt{ flex:1 1 100%; }
+  .topbar{ padding:12px 14px; }
   .topbar h2{ font-size:1.04rem; }
   .card{ padding:17px 15px; border-radius:var(--r-md); }
   .grid2,.grid3{ grid-template-columns:1fr; }

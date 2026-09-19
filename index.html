@@ -43,7 +43,7 @@
      while after merge. Bump this SAME string on style.css AND app.js
      together, every time either file changes, so a stale copy of one
      can never get paired with a fresh copy of the other. -->
-<link rel="stylesheet" href="style.css?v=2026091901">
+<link rel="stylesheet" href="style.css?v=2026091902">
 </head>
 <body>
 
@@ -114,18 +114,27 @@
   </aside>
 
   <div id="content">
+    <!-- Two independent flex rows, always (not just below some breakpoint):
+         row1 (menu+title) and row2 (status pills+link) can never overlap
+         each other at any viewport width because they are separate
+         block-level children stacked in normal flow -- row2 wraps freely
+         within itself on narrow screens, but can never spill into row1's
+         space the way a single shared flex row could. -->
     <header class="topbar">
-      <button id="menuBtn" class="btn icon ghost" type="button" aria-label="මෙනුව විවෘත කරන්න">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-      </button>
-      <div class="tt">
-        <h2 id="pageTitle">දළ විශ්ලේෂණය</h2>
-        <div class="ts" id="pageSub">පද්ධතියේ වත්මන් තත්ත්වය</div>
+      <div class="topbar-row1">
+        <button id="menuBtn" class="btn icon ghost" type="button" aria-label="මෙනුව විවෘත කරන්න">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="tt">
+          <h2 id="pageTitle">දළ විශ්ලේෂණය</h2>
+          <div class="ts" id="pageSub">පද්ධතියේ වත්මන් තත්ත්වය</div>
+        </div>
       </div>
-      <span class="sp"></span>
-      <span class="sync-pill" id="syncPill" title="Firestore සජීවී සම්බන්ධතාවය"><i class="dot"></i><span id="syncTxt">සජීවී</span></span>
-      <span class="sync-pill" id="adminActiveBadge" title="පොදු අඩවිය තාවකාලිකව නවත්වා ඇතත්, admin පද්ධතිය සහ අමුත්තන්ගේ දත්ත සම්පූර්ණයෙන් සක්‍රියව පවතී" hidden><i class="dot"></i><span>Admin සක්‍රියව පවතී</span></span>
-      <a class="btn sm ghost" href="https://helasiritha.vercel.app" target="_blank" rel="noopener noreferrer">පොදු අඩවිය ↗</a>
+      <div class="topbar-row2">
+        <span class="sync-pill" id="syncPill" title="Firestore සජීවී සම්බන්ධතාවය"><i class="dot"></i><span id="syncTxt">සජීවී</span></span>
+        <span class="sync-pill" id="siteStatusBadge" title="පොදු අඩවිය (helasiritha.vercel.app) වත්මන් තත්ත්වය"><i class="dot"></i><span id="siteStatusTxt">පොදු අඩවිය සක්‍රියයි</span></span>
+        <a class="btn sm ghost" href="https://helasiritha.vercel.app" target="_blank" rel="noopener noreferrer">පොදු අඩවිය ↗</a>
+      </div>
     </header>
 
     <main id="main">
@@ -157,6 +166,6 @@
   </div>
 </noscript>
 
-<script type="module" src="app.js?v=2026091901"></script>
+<script type="module" src="app.js?v=2026091902"></script>
 </body>
 </html>
