@@ -379,7 +379,13 @@ let visitsCapped = false, signMode = "unknown";
 let qrPersisted = null;   // { baseUrl, src, url, generatedAt, generatedBy } — adminSettings/qr, synced live
 let pinState    = null;   // { pinHash, pinSalt, updatedAt, updatedBy } — adminSettings/security, synced live
 let sessionStart = Date.now(), lastActivity = Date.now();
-let upTestReport = "";
+/* Both persisted to localStorage: a diagnostic result is only worth showing
+   if it survives the reload an admin does right after reading it, not just
+   a same-session re-render. */
+function loadUpTestReport() {
+  try { return localStorage.getItem("hs_sec_uptest") || ""; } catch (_) { return ""; }
+}
+let upTestReport = loadUpTestReport();
 let pubDirReport = "";
 let rsvpMap = {};
 let current = "dashboard";
@@ -2145,11 +2151,22 @@ window.addEventListener("message", (e) => {
    and the public unsigned preset can then be switched off in Cloudinary. On a
    host without functions (GitHub Pages) it degrades to the unsigned preset.
    ════════════════════════════════════════════════════════════════════════════ */
-let signDiag = { state: "untested", status: 0, reason: "" };
+function loadSignDiag() {
+  try {
+    const v = JSON.parse(localStorage.getItem("hs_sec_signdiag"));
+    if (v && v.state) return v;
+  } catch (_) {}
+  return { state: "untested", status: 0, reason: "" };
+}
+function setSignDiag(v) {
+  signDiag = v;
+  try { localStorage.setItem("hs_sec_signdiag", JSON.stringify(v)); } catch (_) {}
+}
+let signDiag = loadSignDiag();
 async function getSignature(paramsToSign) {
   try {
     const u = auth.currentUser;
-    if (!u) { signDiag = { state: "fail", status: 0, reason: "not signed in" }; return null; }
+    if (!u) { setSignDiag({ state: "fail", status: 0, reason: "not signed in" }); return null; }
     const token = await u.getIdToken();          /* proves who is asking */
     const r = await fetch(SIGN_ENDPOINT, {
       method: "POST",
@@ -2159,19 +2176,19 @@ async function getSignature(paramsToSign) {
     let j = null;
     try { j = await r.json(); } catch (_) {}
     if (!r.ok) {
-      signDiag = { state: "fail", status: r.status,
-                   reason: (j && (j.message || j.error)) || ("HTTP " + r.status) };
+      setSignDiag({ state: "fail", status: r.status,
+                    reason: (j && (j.message || j.error)) || ("HTTP " + r.status) });
       return null;
     }
     if (!(j && j.signature && j.apiKey && j.cloudName)) {
-      signDiag = { state: "fail", status: r.status, reason: "incomplete signature response" };
+      setSignDiag({ state: "fail", status: r.status, reason: "incomplete signature response" });
       return null;
     }
-    signDiag = { state: "ok", status: 200, reason: "signed uploads active" };
+    setSignDiag({ state: "ok", status: 200, reason: "signed uploads active" });
     return j;
   } catch (e) {
     /* 404 on a host without functions (e.g. GitHub Pages) lands here too */
-    signDiag = { state: "fail", status: 0, reason: (e && e.message) || "endpoint unreachable" };
+    setSignDiag({ state: "fail", status: 0, reason: (e && e.message) || "endpoint unreachable" });
     return null;
   }
 }
@@ -2628,8 +2645,10 @@ renderers.security = function () {
       lines.push("  ts      : " + sig.timestamp + "  (server clock)");
       lines.push("  එබැවින් preset එකක් අවශ්‍ය නැත. ඡායාරූප දැන් උඩුගත වේ. ✓");
     }
-    /* store first, then re-render — the report survives the refresh */
+    /* store first, then re-render -- persisted so the result actually
+       survives a hard reload, not just a same-session re-render */
     upTestReport = lines.join("\n");
+    try { localStorage.setItem("hs_sec_uptest", upTestReport); } catch (_) {}
     btn.disabled = false;
     renderers.security();
     paint(upTestReport);
