@@ -313,7 +313,16 @@ const CONTENT_DEFAULT = {
      together on "restore the normal site" so a past-due schedule can never
      silently keep the lockdown on after an admin thinks they've turned it
      off — see renderers.postwedding's pwOff handler. */
-  postWeddingMode: false, postWeddingScheduleAt: "", postWeddingMessage: ""
+  postWeddingMode: false, postWeddingScheduleAt: "", postWeddingMessage: "",
+  /* Site launch gate — the mirror-image switch at the OTHER end of the
+     lifecycle: OFF before the admin is ready for anyone (including a guest
+     who already has the QR/link) to see the real site, ON once it should be
+     public. Defaults to true (site visible) so this field being entirely
+     absent on an existing Firestore doc — e.g. right after this feature
+     ships — can never silently take an already-live site offline; an admin
+     has to explicitly switch it off. See isSiteLive()/computeSiteScreenState()
+     in the public site's app.js. */
+  siteLive: true, sitePausedMessage: ""
 };
 /* Invitation-scroll (සන්නස) overrides — the iframe reads live[key + Si|En|Ta] */
 const SANNASA_KEYS = [
@@ -678,7 +687,7 @@ function startSubscriptions() {
     content = Object.assign({}, CONTENT_DEFAULT, d);
     content.show = Object.assign({}, CONTENT_DEFAULT.show, d.show || {});
     netState(s.metadata);
-    refresh("details"); refresh("visibility"); refresh("dashboard"); refresh("postwedding");
+    refresh("details"); refresh("visibility"); refresh("dashboard"); refresh("postwedding"); refresh("sitelive");
   }, warn("content"));
 
   onSnapshot(doc(db, "site", "agenda"), (s) => {
@@ -883,7 +892,8 @@ const ICONS = {
   chart:"M3 3v18h18M7 15l3-4 3 3 5-7",
   qr:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 20h1M17 20v1",
   shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
-  gift:"M12 8V21M12 8a2.5 2.5 0 10-2.5-2.5A2.5 2.5 0 0012 8zM12 8a2.5 2.5 0 102.5-2.5A2.5 2.5 0 0012 8zM3 12h18v3H3zM4 15h16v6H4z"
+  gift:"M12 8V21M12 8a2.5 2.5 0 10-2.5-2.5A2.5 2.5 0 0012 8zM12 8a2.5 2.5 0 102.5-2.5A2.5 2.5 0 0012 8zM3 12h18v3H3zM4 15h16v6H4z",
+  power:"M18.36 6.64a9 9 0 11-12.73 0M12 2v10"
 };
 const NAV = [
   { group: "මූලික",   items: [
@@ -911,6 +921,9 @@ const NAV = [
   { group: "ආරක්ෂාව",  items: [
     { key: "security",   label: "ආරක්ෂාව හා සටහන්",   icon: "shield" }
   ]},
+  { group: "අඩවි දියත් කිරීම", items: [
+    { key: "sitelive",   label: "අඩවිය සක්‍රිය/අක්‍රිය", icon: "power" }
+  ]},
   { group: "විවාහයෙන් පසු", items: [
     { key: "postwedding", label: "ස්තූති තිර මාදිලිය", icon: "gift" }
   ]}
@@ -929,7 +942,8 @@ const TITLES = {
   analytics:  ["පැමිණීම් විශ්ලේෂණය", "QR · වෙබ් · සෘජු පැමිණීම් සජීවීව"],
   qr:         ["QR කේත මධ්‍යස්ථානය", "ආරාධනා QR කේත සාදා බාගන්න"],
   security:   ["ආරක්ෂාව හා සටහන්", "පිවිසුම් තත්ත්වය සහ පරිපාලන ක්‍රියා සටහන"],
-  postwedding: ["ස්තූති තිර මාදිලිය", "විවාහයෙන් පසු පොදු අඩවිය අගුළු දමා ස්තූති පණිවිඩය පමණක් පෙන්වීම"]
+  postwedding: ["ස්තූති තිර මාදිලිය", "විවාහයෙන් පසු පොදු අඩවිය අගුළු දමා ස්තූති පණිවිඩය පමණක් පෙන්වීම"],
+  sitelive:    ["අඩවි දියත් කිරීම", "විවාහ දිනට පෙර පොදු අඩවිය සක්‍රිය/අක්‍රිය කිරීම"]
 };
 const svg = (k) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (ICONS[k] || ICONS.grid) + '"/></svg>';
 
@@ -2679,6 +2693,77 @@ renderers.security = function () {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     logAudit("backup.download", dayKey(Date.now()));
     toast("උපස්ථය බාගත විය ✓", "ok");
+  };
+};
+
+/* ════════════════════ SITE LAUNCH GATE ══════════════════════════════════════
+   A master ON/OFF switch for the public site itself — the mirror-image of
+   Post-Wedding Mode at the OTHER end of the lifecycle. While off, every
+   visitor (including a guest who already has the QR code or a direct link)
+   sees one static "ළඟදීම" (coming soon) screen instead of Sannasa/RSVP/
+   වැඩසටහන/ඡායාරූප/සුබ පැතුම්. Defaults to ON (siteLive !== false on the
+   public site) so shipping this feature itself can never silently take an
+   already-live site offline — an admin has to explicitly switch it off.
+   Independent of Post-Wedding Mode: the public site checks post-wedding
+   FIRST (see computeSiteScreenState() in its app.js), so the two can never
+   fight over which screen wins even if both were ever on at once. Same PIN
+   + confirmation severity as Post-Wedding Mode, since turning this off
+   hides the entire site — RSVP included — from every visitor at once. */
+renderers.sitelive = function () {
+  const c = content;
+  const live = c.siteLive !== false;
+
+  const statusLine = live
+    ? '<span class="pill yes">සක්‍රියයි — පොදු අඩවිය සියලුම අමුත්තන්ට පෙනේ</span>'
+    : '<span class="pill no">අක්‍රියයි — "ළඟදීම" තිරය පමණක් පෙනේ</span>';
+
+  $("#p-sitelive").innerHTML =
+    card('<h3>වත්මන් තත්ත්වය</h3><p class="hint">පොදු අඩවිය මෙම තත්ත්වය සජීවීව අනුගමනය කරයි — වෙනසක් සිදු වූ ගමන්ම සියලුම අමුත්තන්ට යෙදේ</p>' +
+      '<div class="row">' + statusLine + '</div>') +
+
+    card('<h3>අඩවිය සක්‍රිය/අක්‍රිය කිරීම</h3>' +
+      '<p class="hint">අක්‍රිය කළ විට, පොදු අඩවියේ Sannasa/RSVP/වැඩසටහන/ඡායාරූප/සුබ පැතුම් සියල්ල වහාම සැඟවී, scroll කිරීම වසා දමා, "ළඟදීම" තිරය පමණක් පෙන්වයි. QR කේතයක් හෝ සෘජු link එකකින් පැමිණෙන ඕනෑම අමුත්තෙකුටත් මෙය එසැණින් බලපායි.</p>' +
+      '<div class="row">' +
+        '<button class="btn bad" id="slOff" type="button"' + (!live ? " disabled" : "") + '>දැන්ම අක්‍රිය කරන්න</button>' +
+        '<button class="btn ghost" id="slOn" type="button"' + (live ? " disabled" : "") + '>දැන්ම සක්‍රිය කරන්න</button>' +
+      '</div>') +
+
+    card('<h3>"ළඟදීම" පණිවිඩය</h3><p class="hint">මෙම තිරය සම්පූර්ණයෙන්ම සිංහලෙන් පමණි — English/தமிழ் භාෂා මාරුව මෙයට බලපාන්නේ නැත</p>' +
+      fld("පණිවිඩය", "f_slMsg", c.sitePausedMessage || "", "textarea") +
+      '<div class="row"><button class="btn primary" id="slMsgSave" type="button">පණිවිඩය සුරකින්න</button>' +
+      '<span class="saved" id="slMsgSaved">✓ සුරැකිණි</span></div>');
+
+  $("#slOff").onclick = async () => {
+    const ok = await requirePin("පොදු අඩවිය අක්‍රිය කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const sure = await confirmBox(
+      "පොදු අඩවිය දැන්ම සම්පූර්ණයෙන් අගුළු දමා, Sannasa/RSVP/වැඩසටහන/ඡායාරූප/සුබ පැතුම් සියල්ල සැඟවෙනු ඇත. QR කේතයක් හෝ link එකක් දැනටමත් ලබාගත් සියලුම අමුත්තන්ටද මෙය වහාම බලපායි. ඉදිරියට යන්නද?",
+      { ok: "ඔව්, දැන්ම අක්‍රිය කරන්න", title: "පොදු අඩවිය අක්‍රිය කරන්න" }
+    );
+    if (!sure) return;
+    try { await saveContent({ siteLive: false }); toast("පොදු අඩවිය අක්‍රියයි ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  $("#slOn").onclick = async () => {
+    const ok = await requirePin("පොදු අඩවිය සක්‍රිය කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    if (!ok) return;
+    const sure = await confirmBox(
+      "පොදු අඩවිය දැන්ම සියලුම අමුත්තන්ට සාමාන්‍ය පරිදි පෙන්වන්නද?",
+      { danger: false, ok: "ඔව්, දැන්ම සක්‍රිය කරන්න", title: "පොදු අඩවිය සක්‍රිය කරන්න" }
+    );
+    if (!sure) return;
+    try { await saveContent({ siteLive: true }); toast("පොදු අඩවිය සක්‍රියයි ✓", "ok"); }
+    catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+  };
+
+  $("#slMsgSave").onclick = async () => {
+    const btn = $("#slMsgSave"); btn.disabled = true;
+    try {
+      await saveContent({ sitePausedMessage: $("#f_slMsg").value.trim() });
+      const s = $("#slMsgSaved"); if (s) { s.classList.add("show"); setTimeout(() => s.classList.remove("show"), 2000); }
+    } catch (e) { toast("සුරැකීම අසාර්ථකයි", "err"); }
+    btn.disabled = false;
   };
 };
 
