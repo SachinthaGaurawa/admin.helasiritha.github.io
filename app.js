@@ -1062,11 +1062,12 @@ const openDrawer  = () => { $("#side").classList.add("open"); $("#scrim").classL
 const closeDrawer = () => { $("#side").classList.remove("open"); $("#scrim").classList.remove("show"); };
 
 /* ── shared markup helpers ───────────────────────────────────────────────── */
-function fld(label, id, val, type) {
+function fld(label, id, val, type, placeholder) {
   type = type || "text";
+  const ph = placeholder ? ' placeholder="' + esc(placeholder) + '"' : "";
   if (type === "textarea")
-    return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><textarea class="inp" id="' + id + '" rows="3">' + esc(val) + '</textarea></div>';
-  return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input class="inp" id="' + id + '" type="' + type + '" value="' + esc(val) + '"></div>';
+    return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><textarea class="inp" id="' + id + '" rows="3"' + ph + '>' + esc(val) + '</textarea></div>';
+  return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input class="inp" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '></div>';
 }
 const card = (inner, cls) => '<div class="card' + (cls ? " " + cls : "") + '">' + inner + '</div>';
 const stat = (v, l, cls) => '<div class="stat' + (cls ? " " + cls : "") + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></div>';
@@ -1201,7 +1202,16 @@ renderers.details = function () {
 
     card('<h3>ආදර සටහන හා සම්බන්ධතා</h3>' +
       fld("ආදර සටහන (Love Note)", "f_loveNote", c.loveNote, "textarea") +
-      '<div class="grid2">' + fld("අත්සන", "f_loveSign", c.loveSign) + fld("දුරකථන අංකය", "f_phone", c.phone) + '</div>' +
+      /* Left blank whenever it still matches "<bride> & <groom>" for the
+         CURRENTLY SAVED names -- i.e. nobody ever customised it, it's just
+         the auto-generated form. Pre-filling it with that stale text made
+         it look "already set" to saveDetails()'s own `v("f_loveSign") ||
+         (bSi+" & "+gSi)` fallback below, so renaming the couple here never
+         reached this signature: the save just wrote the OLD pair straight
+         back. Blank here means the save regenerates it fresh from whatever
+         names are in the form THIS time; an admin's real custom signature
+         (anything not matching that exact pattern) is preserved as before. */
+      '<div class="grid2">' + fld("අත්සන", "f_loveSign", (c.loveSign === (c.brideName + " & " + c.groomName)) ? "" : (c.loveSign || ""), "text", c.brideName + " & " + c.groomName + " (ස්වයංක්‍රීය)") + fld("දුරකථන අංකය", "f_phone", c.phone) + '</div>' +
       '<div class="grid2">' + fld("WhatsApp අංකය (94…)", "f_whatsapp", c.whatsapp) + fld("පසුබිම් සංගීත URL (mp3)", "f_ambientAudioUrl", c.ambientAudioUrl) + '</div>' +
       '<div class="row"><button class="btn primary" id="saveDetails" type="button">සියල්ල සුරකින්න</button>' +
       '<span class="saved" id="savedDetails">✓ සුරැකිණි · පොදු අඩවියට යෙදිණි</span></div>') +
