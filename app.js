@@ -687,6 +687,12 @@ function startSubscriptions() {
     content = Object.assign({}, CONTENT_DEFAULT, d);
     content.show = Object.assign({}, CONTENT_DEFAULT.show, d.show || {});
     netState(s.metadata);
+    // Reassurance badge: the public site can be paused (siteLive:false) while
+    // this admin panel and its Firestore connection keep working normally --
+    // shown next to #syncPill so it's never mistaken for the panel itself
+    // being down, on every screen, not just the sitelive panel.
+    const alb = $("#adminActiveBadge");
+    if (alb) alb.hidden = content.siteLive !== false;
     refresh("details"); refresh("visibility"); refresh("dashboard"); refresh("postwedding"); refresh("sitelive");
   }, warn("content"));
 
