@@ -35,8 +35,15 @@
     }
   };
 </script>
-<!-- Loaded AFTER Tailwind so the bespoke luxury layer always wins -->
-<link rel="stylesheet" href="style.css">
+<!-- Loaded AFTER Tailwind so the bespoke luxury layer always wins.
+     ?v= is a cache-buster -- GitHub Pages' CDN and returning browsers can
+     both hold on to the previous style.css/app.js for a while after a new
+     deploy, which is exactly why a shipped fix (e.g. the topbar overlap
+     fix) can still show the old broken layout on a real device for a
+     while after merge. Bump this SAME string on style.css AND app.js
+     together, every time either file changes, so a stale copy of one
+     can never get paired with a fresh copy of the other. -->
+<link rel="stylesheet" href="style.css?v=2026091901">
 </head>
 <body>
 
@@ -150,6 +157,6 @@
   </div>
 </noscript>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=2026091901"></script>
 </body>
 </html>
