@@ -284,7 +284,7 @@ function paintDetailsLock() {
    shows the real current text even before the first Firestore save exists.
    ════════════════════════════════════════════════════════════════════════════ */
 const CONTENT_DEFAULT = {
-  brideName: "කෞශානි", groomName: "ගෞරව",
+  brideName: "කෞෂානි", groomName: "ගෞරව",
   brideNameEn: "Kaushani", groomNameEn: "Gaurawa",
   brideNameTa: "கௌஷானி", groomNameTa: "கௌரவ",
   brideFather: "", brideFatherEn: "", brideFatherTa: "",
@@ -301,7 +301,7 @@ const CONTENT_DEFAULT = {
   poruwaTime: "පෙ.ව. 09.28",
   heroImageUrl: "",
   loveNote: "ආදරයෙන් හා කෘතඥතාවයෙන් පිරුණු හදවත් සමඟ, අපගේ ජීවිතයේ මෙම සුන්දර පරිච්ඡේදය ඔබ සමඟ සැමරීමට ලැබීම ගැන අපි ඉතා සතුටු වෙමු.",
-  loveSign: "කෞශානි & ගෞරව",
+  loveSign: "කෞෂානි & ගෞරව",
   phone: "", whatsapp: "", ambientAudioUrl: "",
   rsvpOpen: true,
   show: { countdown: true, agenda: true, gallery: true, lovenote: true, blessings: true, rsvp: true },
@@ -1076,7 +1076,7 @@ const swRow = (label, hint, id, on) =>
   '<button class="sw' + (on ? " on" : "") + '" id="' + id + '" type="button" role="switch" aria-checked="' + (!!on) + '" aria-label="' + esc(label) + '"></button></div>';
 const statusPill = (s) => s === "confirmed" ? '<span class="pill yes">තහවුරු</span>'
   : s === "declined" ? '<span class="pill no">නොපැමිණේ</span>' : '<span class="pill pend">පොරොත්තු</span>';
-const sideName = (s) => s === "bride" ? "කෞශානි" : "ගෞරව";
+const sideName = (s) => s === "bride" ? "කෞෂානි" : "ගෞරව";
 function toLocalInput(iso) { const m = String(iso || "").match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/); return m ? m[1] + "T" + m[2] : ""; }
 function fromLocalInput(v) { return v ? v + ":00+05:30" : CONTENT_DEFAULT.dateISO; }
 function dateStrings(iso) {
@@ -1133,7 +1133,7 @@ renderers.dashboard = function () {
         '<button class="btn sm ghost" data-jump="seating">ආසන (' + seated + '/' + confirmed.length + ')</button>' +
       '</div>') +
     card('<h3>පාර්ශව අනුව</h3><p class="hint">මනාලිය සහ මනාලයාගේ ආරාධිත බෙදීම</p>' +
-      '<div class="split">' + sideCol("කෞශානි · මනාලිය", bride) + sideCol("ගෞරව · මනාලයා", groom) + '</div>') +
+      '<div class="split">' + sideCol("කෞෂානි · මනාලිය", bride) + sideCol("ගෞරව · මනාලයා", groom) + '</div>') +
     card('<h3>නවතම පිළිතුරු</h3>' + (recent.length
       ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th><th>මත්පැන්</th></tr></thead><tbody>' +
         recent.map(g => '<tr><td>' + esc(g.name) + '</td><td>' + esc(sideName(g.side)) + '</td><td>' + statusPill(g.status) +
@@ -1164,7 +1164,7 @@ renderers.details = function () {
       tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa) +
       '<p class="hint" style="padding-inline-start:13px">පියාගේ නම (මුලකුරු + වාසගම) සහ පසුව එන වාක්‍ය ඛණ්ඩය වෙන් වෙන්ව. ' +
       'උදා: <b>ඩබ්ලිව්.පී.ජී. වික්‍රමසිංහ</b> + <b>මහත්මා සහ එම මැතිනියගේ ආදරණීය දියණිය වූ,</b></p>' +
-      tri("brideFather", "කෞශානිගේ පියාගේ නම (මුලකුරු + වාසගම)", c.brideFather || "", c.brideFatherEn || "", c.brideFatherTa || "") +
+      tri("brideFather", "කෞෂානිගේ පියාගේ නම (මුලකුරු + වාසගම)", c.brideFather || "", c.brideFatherEn || "", c.brideFatherTa || "") +
       tri("brideParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.bridePreLine, c.bridePreLineEn || "", c.bridePreLineTa || "", "textarea") +
       tri("groomFather", "ගෞරවගේ පියාගේ නම (මුලකුරු + වාසගම)", c.groomFather || "", c.groomFatherEn || "", c.groomFatherTa || "") +
       tri("groomParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.groomPreLine, c.groomPreLineEn || "", c.groomPreLineTa || "", "textarea")) +
@@ -1318,7 +1318,7 @@ renderers.guests = function () {
       '<div class="grid2">' + fld("නම", "g_name", "") + fld("පවුලේ නාමය (විකල්ප)", "g_family", "") + '</div>' +
       '<div class="grid3">' +
         '<div class="field"><label for="g_side">පාර්ශවය</label><select class="inp" id="g_side">' +
-          '<option value="bride">කෞශානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
+          '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
         fld("සාමාජික සංඛ්‍යාව", "g_count", "1", "number") +
         '<div class="field"><label for="g_diet">ආහාර අවශ්‍යතා (විකල්ප)</label><input class="inp" id="g_diet"></div>' +
       '</div>' +
@@ -1328,7 +1328,7 @@ renderers.guests = function () {
       '<p class="hint">තීරු අනුපිළිවෙළ: <code>නම, පවුලේ නාමය, ගණන</code> — ශීර්ෂ පේළියක් තිබීම කම් නැත</p>' +
       '<div class="grid2">' +
         '<div class="field"><label for="bk_side">පාර්ශවය</label><select class="inp" id="bk_side">' +
-          '<option value="bride">කෞශානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
+          '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
         '<div class="field"><label for="bk_file">.xlsx / .xls / .csv ගොනුව</label><input class="inp" id="bk_file" type="file" accept=".xlsx,.xls,.csv"></div>' +
       '</div>' +
       '<div class="field"><label for="bk_text">නැතහොත් කෙලින්ම අලවන්න</label>' +
@@ -1340,7 +1340,7 @@ renderers.guests = function () {
       '<input class="inp" id="gSearch" placeholder="සොයන්න…" style="max-width:230px" value="' + esc(gFilter.q) + '"></div>' +
       '<div class="filters">' +
         chip("සියල්ල (" + G.length + ")", "all", gFilter.side) +
-        chip("කෞශානි (" + bride + ")", "bride", gFilter.side) +
+        chip("කෞෂානි (" + bride + ")", "bride", gFilter.side) +
         chip("ගෞරව (" + groom + ")", "groom", gFilter.side) +
       '</div>' +
       (slice.length
@@ -1349,7 +1349,7 @@ renderers.guests = function () {
             '<tr>' +
             '<td><input class="mini k-name" data-id="' + g.id + '" value="' + esc(g.name) + '" style="min-width:118px"></td>' +
             '<td><input class="mini k-fam" data-id="' + g.id + '" value="' + esc(g.family) + '" style="min-width:104px"></td>' +
-            '<td><select class="mini k-side" data-id="' + g.id + '"><option value="bride"' + (g.side === "bride" ? " selected" : "") + '>කෞශානි</option><option value="groom"' + (g.side === "groom" ? " selected" : "") + '>ගෞරව</option></select></td>' +
+            '<td><select class="mini k-side" data-id="' + g.id + '"><option value="bride"' + (g.side === "bride" ? " selected" : "") + '>කෞෂානි</option><option value="groom"' + (g.side === "groom" ? " selected" : "") + '>ගෞරව</option></select></td>' +
             '<td><input class="mini k-count num" data-id="' + g.id + '" type="number" min="1" max="40" value="' + g.count + '" style="width:62px"></td>' +
             '<td><select class="mini k-status" data-id="' + g.id + '"><option value="pending"' + (g.status === "pending" ? " selected" : "") + '>පොරොත්තු</option><option value="confirmed"' + (g.status === "confirmed" ? " selected" : "") + '>තහවුරු</option><option value="declined"' + (g.status === "declined" ? " selected" : "") + '>නොපැමිණේ</option></select></td>' +
             '<td style="text-align:center"><input type="checkbox" class="k-liq" data-id="' + g.id + '"' + (g.liquor ? " checked" : "") + '></td>' +
@@ -1964,7 +1964,7 @@ renderers.theme = function () {
         '<div class="thm-pick"><input type="color" class="thm-color" data-k="' + k + '" value="' + esc(t[k]) + '" aria-label="' + esc(label) + '">' +
         '<input type="text" class="inp thm-hex" data-k="' + k + '" value="' + esc(String(t[k]).toUpperCase()) + '" maxlength="7" spellcheck="false"></div></div>').join("") +
       '<div class="thm-prev" id="thPrev"><div class="thm-card">' +
-        '<div class="ay">ශුභ මංගලම්</div><div class="nm">කෞශානි &amp; ගෞරව</div>' +
+        '<div class="ay">ශුභ මංගලම්</div><div class="nm">කෞෂානි &amp; ගෞරව</div>' +
         '<div class="ln">ඔබගේ පැමිණීම අපගේ භාග්‍යයකි</div></div></div>' +
       '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
         (theme.previous ? '<button class="btn sm bad" id="thUndo" type="button">↩ පෙර වර්ණ වලට හරවන්න</button>' : '') +
