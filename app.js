@@ -63,6 +63,11 @@ const PUBLIC_SITE = "https://helasiritha.vercel.app";
 /* Serverless signing endpoint (Vercel). If it is absent (e.g. GitHub Pages) the
    uploader transparently falls back to the unsigned preset. */
 const SIGN_ENDPOINT = "/api/sign-upload";
+/* Same "absent on a host without functions" fallback story as SIGN_ENDPOINT
+   above -- see reset-visits.js's own header comment for why this needs a
+   server-side endpoint at all (Firestore rules block every client delete
+   on /visits unconditionally, admin included). */
+const RESET_VISITS_ENDPOINT = "/api/reset-visits";
 const IDLE_LOGOUT_MS = 20 * 60 * 1000;   // auto sign-out after 20 min idle
 const VISIT_KINDS = ["qr", "web", "direct"];
 
@@ -2289,6 +2294,35 @@ function setSignDiag(v) {
   try { localStorage.setItem("hs_sec_signdiag", JSON.stringify(v)); } catch (_) {}
 }
 let signDiag = loadSignDiag();
+/* Same pattern as signDiag above, for /api/reset-visits -- but this one is
+   checked automatically (see renderers.security), not only after someone
+   presses a button, because its GET branch needs no auth and does nothing
+   destructive: it only reports whether FIREBASE_SERVICE_ACCOUNT_JSON is
+   set, so there's no reason to make the admin dig for that separately from
+   actually trying (and possibly failing) a real reset. */
+let resetDiag = { state: "untested", reason: "" };
+let resetDiagChecked = false; // guards against re-checking (and re-rendering) on every panel open
+async function checkResetDiag() {
+  if (resetDiagChecked) return;
+  resetDiagChecked = true;
+  try {
+    const r = await fetch(RESET_VISITS_ENDPOINT, { method: "GET" });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ready) resetDiag = { state: "ok", reason: "ගණන් ශුන්‍ය කිරීම සක්‍රීයයි" };
+    else if (r.ok && j) resetDiag = { state: "fail", reason: !j.configured.firebaseKey ? "FIREBASE_WEB_API_KEY සකසා නැත" : "FIREBASE_SERVICE_ACCOUNT_JSON සකසා නැත" };
+    else resetDiag = { state: "fail", reason: "HTTP " + r.status };
+  } catch (e) {
+    resetDiag = { state: "fail", reason: (e && e.message) || "endpoint unreachable" };
+  }
+  /* Update the row's own two spans directly rather than re-invoking
+     renderers.security() -- that would rebuild the whole panel (and, since
+     this same function runs at the top of that renderer, re-trigger this
+     exact check again on every completion, forever). */
+  const row = document.getElementById("resetDiagRow");
+  if (row) row.classList.toggle("ok", resetDiag.state === "ok");
+  const detail = document.getElementById("resetDiagDetail");
+  if (detail) detail.textContent = resetDiag.state === "ok" ? resetDiag.reason : "සකසා නැත: " + resetDiag.reason;
+}
 async function getSignature(paramsToSign) {
   try {
     const u = auth.currentUser;
@@ -2403,21 +2437,50 @@ function visitStats() {
   });
   return { by, total, today: todayN, last7 };
 }
-/* Reset was never actually possible -- see isProbeVisit's own comment:
-   `allow delete: if false` on /visits blocks every client-side delete
-   unconditionally, admin included, so every attempt here used to fail
-   silently behind "මැකීම අසාර්ථකයි — නැවත උත්සාහ කරන්න" ("failed, try
-   again") forever. That was actively misleading — no number of retries was
-   ever going to succeed, by design, not by accident. Kept as a real button
-   (not removed) because zeroing a count is still a reasonable thing to
-   want; it just needs a privileged server-side path (a Vercel function
-   using the Firebase Admin SDK, which — unlike this client SDK — isn't
-   subject to these rules at all, mirroring how /api/sign-upload.js already
-   keeps the Cloudinary secret off the client) to ever actually work. Says
-   so plainly now instead of pretending a retry might help. */
-function resetVisits(kind) {
+/* `allow delete: if false` on /visits blocks every client-side delete
+   unconditionally, admin included -- this used to make every reset attempt
+   fail silently behind "මැකීම අසාර්ථකයි — නැවත උත්සාහ කරන්න" ("failed, try
+   again") forever, which was actively misleading, since no number of
+   retries was ever going to succeed. The real fix needed a privileged
+   server-side path, unreachable from Security Rules the way this client
+   SDK is -- /api/reset-visits.js now provides exactly that (see its own
+   header comment for the full mechanism: a self-signed service-account
+   JWT, exchanged for an OAuth2 token, used to call the plain Firestore
+   REST API directly). This function is the client half: authenticate,
+   confirm twice exactly as before, call it, and report the real count
+   the server actually deleted. */
+async function resetVisits(kind) {
   const label = kind === "qr" ? "QR" : kind === "web" ? "වෙබ්" : "සියලු";
-  toast(label + " ගණන ශුන්‍ය කළ නොහැක — Firestore rules මගින්ම (admin ඇතුළුව) මකා දැමීම අනුමත කර නැත, හිතාමතාම", "warn");
+  const n = kind ? (visitStats().by[kind] || 0) : visitStats().total;
+  if (!n) { toast(label + " වාර්තා නොමැත", "warn"); return; }
+  if (!await confirmTwice(
+    label + " පැමිණීම් වාර්තා " + n + "ක් මකනවාද?",
+    "අවසන් තහවුරුව — වාර්තා " + n + "ක් ස්ථිරවම මකා දැමේ. ආපසු හැරවිය නොහැක.",
+    "ඔව්, ස්ථිරවම මකන්න")) return;
+  const u = auth.currentUser;
+  if (!u) { toast("පිවිසී නොමැත", "err"); return; }
+  try {
+    const token = await u.getIdToken();
+    const r = await fetch(RESET_VISITS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify({ kind: kind || null })
+    });
+    let j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!r.ok || !j || !j.ok) {
+      /* Endpoint not deployed yet, or FIREBASE_SERVICE_ACCOUNT_JSON not
+         configured in Vercel -- both land here as a normal error response
+         (see reset-visits.js's own GET diagnostic branch), not a crash. */
+      const reason = (j && j.error) || ("HTTP " + r.status);
+      toast(label + " ගණන ශුන්‍ය කළ නොහැක — " + reason, "err");
+      return;
+    }
+    logAudit("visits.reset", (kind || "all") + " ×" + j.deleted);
+    toast(label + " ගණන ශුන්‍ය කෙරිණි ✓ (" + j.deleted + ")", "ok");
+  } catch (e) {
+    toast(label + " ගණන ශුන්‍ය කළ නොහැක — " + ((e && e.message) || "server unreachable"), "err");
+  }
 }
 
 renderers.analytics = function () {
@@ -2497,7 +2560,7 @@ renderers.analytics = function () {
       '<p class="hint">ගණන් ශුන්‍ය නම් බොහෝවිට `visits` rule එක deploy වී නැත. මෙය ඒක තහවුරු කරයි.</p>' +
       '<div class="row"><button class="btn primary sm" id="vProbe" type="button">පැමිණීම් ලිවීම පරීක්ෂා කරන්න</button></div>' +
       '<pre id="vProbeOut" class="up-test" hidden></pre>') +
-    card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ගණන් වලින් ශුන්‍ය කිරීම — දැනට client එකෙන් කළ නොහැක (පහත බලන්න)</p>' +
+    card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ස්ථිරවම මකා දමයි · දෙවරක් තහවුරු කරයි · Vercel එකේ FIREBASE_SERVICE_ACCOUNT_JSON සකසා නැත්නම් error එකක් පෙන්වයි</p>' +
       '<div class="row">' +
         '<button class="btn sm bad" id="rsQr"  type="button">QR ගණන ශුන්‍ය (' + S.by.qr + ')</button>' +
         '<button class="btn sm bad" id="rsWeb" type="button">වෙබ් ගණන ශුන්‍ය (' + S.by.web + ')</button>' +
@@ -2746,6 +2809,17 @@ renderers.security = function () {
         : "තවම පරීක්ෂා කර නැත — පහත බොත්තම ඔබන්න") +
       '<div class="row" style="margin:2px 0 8px"><button class="btn sm primary" id="secTestUp" type="button">උඩුගත කිරීම පරීක්ෂා කරන්න</button></div>' +
       '<pre id="upTest" class="up-test"' + (upTestReport ? '>' + esc(upTestReport) : ' hidden>') + '</pre>' +
+      /* No manual test button here -- unlike the upload signer above, this
+         check is a plain, unauthenticated, side-effect-free GET (see
+         checkResetDiag()'s own comment), so it runs by itself the moment
+         this panel opens instead of waiting for a click. */
+      '<div class="sec-note' + (resetDiag.state === "ok" ? " ok" : "") + '" id="resetDiagRow">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="' +
+        (resetDiag.state === "ok" ? "M20 6L9 17l-5-5" : "M12 8v5M12 16h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z") +
+      '"/></svg><div><b>ගණන් ශුන්‍ය කිරීම</b><div id="resetDiagDetail">' +
+        (resetDiag.state === "untested" ? "පරීක්ෂා කරමින්…"
+          : resetDiag.state === "ok" ? esc(resetDiag.reason) : "සකසා නැත: " + esc(resetDiag.reason)) +
+      '</div></div></div>' +
       '<div class="row" style="margin-top:6px">' +
         '<span class="faint" style="font-size:.8rem">සැසිය මිනිත්තු ' + mins + 'ක් · අක්‍රීය මිනිත්තු 20කින් ස්වයංක්‍රීයව පිටවේ</span>' +
         '<span class="sp" style="flex:1"></span>' +
@@ -2783,6 +2857,8 @@ renderers.security = function () {
             '<div class="who">' + esc(a.email || "") + ' · ' +
             esc(a.ts && a.ts.seconds ? new Date(a.ts.seconds * 1000).toLocaleString("si-LK") : "") + '</div></div></div>').join("") + '</div>'
         : '<div class="empty">තවම සටහන් නැත. (rules deploy කළ පසු ක්‍රියාත්මක වේ)</div>'));
+
+  checkResetDiag(); // no-op after the first call this session (see its own guard)
 
   /* One tap tells you exactly what the uploader will do and why. */
   $("#secTestUp").onclick = async () => {
