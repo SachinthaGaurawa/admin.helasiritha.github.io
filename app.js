@@ -1190,14 +1190,25 @@ function fmtDtDisplay(v, type) {
    input listener itself only needs binding once per element (guarded by
    dataset.dtWired), since typing/picking a new value doesn't trigger a
    re-render on its own. */
+const DT_PLACEHOLDER = "දිනය සහ වේලාව තෝරන්න";
+/* An empty field left this overlay showing literally nothing -- the real
+   <input> is invisible at rest (opacity:0, see style.css), so an unset
+   date/time looked like a dead, unclickable box with no hint it was a
+   field at all. Paint a placeholder (muted, same token every other input's
+   ::placeholder already uses) instead of leaving it blank. */
+function paintDtDisplay(disp, inp) {
+  const text = fmtDtDisplay(inp.value, inp.type);
+  disp.textContent = text || DT_PLACEHOLDER;
+  disp.classList.toggle("dt-display-empty", !text);
+}
 function syncDtDisplays() {
   $$(".dt-native").forEach(inp => {
     const disp = document.getElementById(inp.id + "_disp");
     if (!disp) return;
-    disp.textContent = fmtDtDisplay(inp.value, inp.type);
+    paintDtDisplay(disp, inp);
     if (!inp.dataset.dtWired) {
       inp.dataset.dtWired = "1";
-      inp.addEventListener("input", () => { disp.textContent = fmtDtDisplay(inp.value, inp.type); });
+      inp.addEventListener("input", () => paintDtDisplay(disp, inp));
     }
   });
 }

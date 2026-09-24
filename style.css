@@ -316,6 +316,11 @@ input.dt-native:not(:focus){ opacity:0; }
   position:absolute; inset:0; z-index:0; display:flex; align-items:center;
   padding:.74em .9em; pointer-events:none; color:var(--ink); font-size:.92rem;
 }
+/* An unset field showed nothing at all here -- the real <input> is
+   invisible at rest (opacity:0 above), so an empty box looked dead and
+   unclickable instead of like a field waiting for input. Same muted token
+   every other input's own ::placeholder already uses (line ~278). */
+.dt-display.dt-display-empty{ color:var(--faint); }
 .dt-wrap:focus-within .dt-display{ display:none; }
 /* Reported again, from a fresh screenshot taken well after the
    ::-webkit-datetime-edit rules below had already deployed to production:
