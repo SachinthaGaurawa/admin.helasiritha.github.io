@@ -256,6 +256,23 @@ button,input,select,textarea{ font-family:inherit; font-size:inherit; color:inhe
 }
 .inp:hover{ border-color:var(--line); }
 .inp:focus{ outline:0; border-color:var(--gold-2); background:rgba(255,255,255,.06); box-shadow:0 0 0 3px rgba(232,201,135,.14); }
+/* Same family of bug as the datetime fields below, different trigger:
+   a browser offering to fill a saved password/PIN (the login PIN fields
+   use type=password) paints its own opaque light background and forces
+   black text via an internal UA style that plain `background`/`color`
+   cannot override at all -- confirmed this is the actual mechanism, not
+   a guess: it's a well-documented Chromium/WebKit quirk, and the fix is
+   the equally well-documented pair below. The absurdly long transition
+   delay is the standard trick for suppressing the background's own
+   flash-to-yellow animation some browsers still play on autofill even
+   once the end color is overridden. */
+.inp:-webkit-autofill,
+.inp:-webkit-autofill:hover,
+.inp:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--ink); -webkit-box-shadow:0 0 0 1000px var(--bg-3) inset;
+  box-shadow:0 0 0 1000px var(--bg-3) inset; caret-color:var(--ink);
+  transition:background-color 9999s ease-in-out 0s;
+}
 textarea.inp{ resize:vertical; min-height:82px; line-height:1.6; }
 select.inp{ appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--gold-2) 50%),linear-gradient(135deg,var(--gold-2) 50%,transparent 50%); background-position:calc(100% - 18px) center,calc(100% - 13px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-inline-end:2.2em; }
 .inp::placeholder{ color:var(--faint); }
