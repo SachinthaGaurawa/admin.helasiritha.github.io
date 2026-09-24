@@ -253,6 +253,17 @@ button,input,select,textarea{ font-family:inherit; font-size:inherit; color:inhe
   width:100%; padding:.74em .9em; border-radius:var(--r-sm);
   background:rgba(255,255,255,.038); border:1px solid var(--line-soft); color:var(--ink);
   font-size:.92rem; transition:.24s var(--ease); min-width:0;
+  /* Same bug as the datetime fields (see color-scheme note further down),
+     confirmed on real Safari from before/after-click screenshots: plain
+     text/number/select/textarea fields painted solid white at rest -- our
+     own background/color above only won once focused, since :focus is
+     this stylesheet's own rule while the unfocused paint came from the
+     browser's native light-mode form-control chrome. color-scheme:dark
+     was previously only declared on date/time .inp fields; this is the
+     same one-line fix, just no longer scoped to only those three types --
+     unlike datetime, a plain input has no inaccessible UA-shadow internals
+     to fight, so this alone is the complete fix here (no overlay needed). */
+  color-scheme:dark;
 }
 .inp:hover{ border-color:var(--line); }
 .inp:focus{ outline:0; border-color:var(--gold-2); background:rgba(255,255,255,.06); box-shadow:0 0 0 3px rgba(232,201,135,.14); }
