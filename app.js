@@ -1496,19 +1496,23 @@ function resetNameTrio(ids) {
    safety net as every other auto-generated field in this admin panel. */
 async function aiTranslate(text, fromLang, toLang, fieldContext) {
   if (!text) return null;
+  /* Returns { error } rather than a bare null on failure -- the FIRST
+     reported failure showed only a generic "අසාර්ථකයි" in the admin UI
+     with no way to tell what actually went wrong, from a screenshot alone,
+     without going and reading server logs by hand every time. */
   try {
-    const u = auth.currentUser; if (!u) return null;
+    const u = auth.currentUser; if (!u) return { error: "signed out" };
     const token = await u.getIdToken();
     const r = await fetch(AI_TRANSLATE_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
       body: JSON.stringify({ text, fromLang, toLang, fieldContext })
     });
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (!j || !j.ok) return null;
+    let j = null; try { j = await r.json(); } catch (_) {}
+    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
+    if (!j || !j.ok) return { error: "unexpected response shape" };
     return { translation: j.translation, confidence: j.confidence, note: j.note };
-  } catch (_) { return null; }
+  } catch (e) { return { error: (e && e.message) || "network error" }; }
 }
 /* Unlike wireNameTrio() (automatic, debounced, fires on every keystroke --
    fine for a fast free phonetic lookup), this is a single explicit button
@@ -1539,7 +1543,8 @@ function wireAiTrio(ids, fieldContext) {
     btn.disabled = true; status.textContent = "🔄 AI පරිවර්තනය වෙමින්...";
     try {
       const results = await Promise.all(targets.map(toLang => aiTranslate(text, srcLang, toLang, fieldContext)));
-      if (results.some(r => !r)) throw new Error("upstream failure");
+      const failed = results.find(r => r && r.error);
+      if (failed) throw new Error(failed.error);
       let worst = "high";
       targets.forEach((toLang, i) => {
         const r = results[i];
@@ -1554,8 +1559,16 @@ function wireAiTrio(ids, fieldContext) {
       status.innerHTML = worst === "high"
         ? '<span style="color:var(--ok)">✓ AI පරිවර්තනය කළා — පරීක්ෂා කර සුරකින්න</span>'
         : '<span style="color:var(--warn)">⚠ AI පරිවර්තනය කළා (අවිනිශ්චිත කොටස් ඇත) — හොඳින් පරීක්ෂා කරන්න</span>';
-    } catch (_) {
-      status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න</span>';
+    } catch (e) {
+      /* Shows the ACTUAL reason inline, not just a bare generic message --
+         the exact gap that made the first reported failure impossible to
+         diagnose from a screenshot alone (hover-only tooltips don't work
+         on mobile either, so the reason is printed directly, not hidden
+         behind a title attribute). Full detail is always in Vercel's
+         server logs regardless. */
+      const reason = ((e && e.message) || "").slice(0, 160);
+      status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න' +
+        (reason ? '<br><span style="font-size:.76rem;opacity:.85">' + esc(reason) + '</span>' : '') + '</span>';
     } finally { btn.disabled = false; }
   };
 }
