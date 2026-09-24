@@ -1635,6 +1635,22 @@ renderers.details = function () {
     $("#f_datePrev").value = d ? (d.si + "  ·  " + d.en + "  ·  " + d.ta) : "—";
   };
   $("#f_date").oninput = paintDate; paintDate();
+  /* Same auto-fill wiring as the guest-name trio (wireNameTrio()) -- but
+     ONLY for fields that are actually personal/place NAMES, where phonetic
+     transliteration (same word, respelled across scripts) is the right
+     operation. Deliberately NOT wired here: bridePreLine/groomPreLine
+     ("the beloved daughter of Mr. & Mrs." etc.), ceremonyTime ("9.00 a.m.
+     onwards"), and every sannasa-scroll field (join/sannasaBody/poruwa/sri/
+     eyebrow/lDate/lTime/lVenue/cue) -- those are complete sentences and
+     short UI-label words that need real MEANING-based translation, a
+     fundamentally different (and unbuilt) capability. Running this
+     transliteration engine on a sentence would not "roughly" translate it
+     -- it would phonetically respell the Sinhala sounds letter-by-letter
+     into nonsense Latin/Tamil text with no relation to the sentence's
+     actual English/Tamil wording, actively corrupting a field that
+     currently holds a real, correct manual translation. */
+  ["brideName", "groomName", "brideFather", "groomFather", "venue", "venueCity"].forEach(base =>
+    wireNameTrio({ si: base + "Si_", en: base + "En_", ta: base + "Ta_" }));
 
   $("#saveDetails").onclick = async () => {
     const btn = $("#saveDetails"); btn.disabled = true; btn.textContent = "සුරකිමින්…";
