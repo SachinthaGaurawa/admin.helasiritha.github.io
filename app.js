@@ -423,6 +423,19 @@ function loadUpTestReport() {
 }
 let upTestReport = loadUpTestReport();
 let pubDirReport = "";
+/* Same reasoning as pubDirReport/upTestReport above, for the visits-write
+   probe: its own write to /visits is exactly what the live onSnapshot
+   listener driving this whole panel reacts to, so a re-render can (and in
+   practice reliably does) land at any point during or after this test --
+   even the re-query fix in the click handler itself only re-targets
+   WHICHEVER copy of #vProbeOut is live at the moment it writes, it can't
+   protect against a LATER re-render (this same listener firing again,
+   completely unrelated to the probe) overwriting that with the template's
+   own default (empty, hidden) markup. Reading from this persisted variable
+   in the template itself -- rather than leaving the result to live only in
+   whatever DOM node happened to exist at write time -- is what actually
+   survives that. */
+let vProbeReport = "";
 let rsvpMap = {};
 let current = "dashboard";
 let subsStarted = false;
@@ -892,6 +905,7 @@ function refresh(panel) {
   const a = document.activeElement;
   if (a && a.closest && a.closest("#main") && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.type !== "checkbox") return;
   renderers[panel]();
+  syncDtDisplays();
 }
 
 /* ════════════════════════ FIRESTORE WRITES ═════════════════════════════════ */
@@ -1091,6 +1105,7 @@ function go(panel) {
   $("#pageTitle").textContent = TITLES[panel][0];
   $("#pageSub").textContent  = TITLES[panel][1];
   if (renderers[panel]) renderers[panel]();
+  syncDtDisplays();
   const m = $("#main"); if (m) m.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1103,7 +1118,48 @@ function fld(label, id, val, type, placeholder) {
   const ph = placeholder ? ' placeholder="' + esc(placeholder) + '"' : "";
   if (type === "textarea")
     return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><textarea class="inp" id="' + id + '" rows="3"' + ph + '>' + esc(val) + '</textarea></div>';
+  /* date/time/datetime-local get a wrapper + a plain sibling <div> instead
+     of a bare <input> -- see syncDtDisplays()'s own comment for the full
+     reasoning: two separate CSS-only attempts at making Safari's native
+     widget itself render readable at rest both failed in real testing, so
+     this stops trying to reskin that native rendering and hides it (fully
+     functional, just invisible) behind an ordinary div this app paints and
+     controls itself instead. */
+  if (type === "date" || type === "time" || type === "datetime-local")
+    return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' +
+      '<div class="dt-wrap"><input class="inp dt-native" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '>' +
+      '<div class="dt-display" id="' + id + '_disp" aria-hidden="true"></div></div></div>';
   return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input class="inp" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '></div>';
+}
+/* Formats a date/time/datetime-local <input>'s raw value (its own local,
+   unambiguous "YYYY-MM-DD"/"HH:MM"/"YYYY-MM-DDTHH:MM" format) the same way
+   this file already formats dates for display elsewhere (si-LK locale),
+   so the overlay reads exactly like the rest of the admin UI, not like a
+   raw ISO string. */
+function fmtDtDisplay(v, type) {
+  if (!v) return "";
+  if (type === "date") { const d = new Date(v + "T00:00:00"); return isNaN(d) ? v : d.toLocaleDateString("si-LK", { year: "numeric", month: "short", day: "numeric" }); }
+  if (type === "time") { const d = new Date("2000-01-01T" + v); return isNaN(d) ? v : d.toLocaleTimeString("si-LK", { hour: "2-digit", minute: "2-digit" }); }
+  const d = new Date(v);
+  return isNaN(d) ? v : d.toLocaleString("si-LK", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+/* Keeps every .dt-display overlay (see fld() above) in sync with its real
+   input's current value -- called after every panel render (see go()/
+   refresh() below) rather than once at creation, since a panel's whole
+   innerHTML (this field included) gets rebuilt on every re-render. The
+   input listener itself only needs binding once per element (guarded by
+   dataset.dtWired), since typing/picking a new value doesn't trigger a
+   re-render on its own. */
+function syncDtDisplays() {
+  $$(".dt-native").forEach(inp => {
+    const disp = document.getElementById(inp.id + "_disp");
+    if (!disp) return;
+    disp.textContent = fmtDtDisplay(inp.value, inp.type);
+    if (!inp.dataset.dtWired) {
+      inp.dataset.dtWired = "1";
+      inp.addEventListener("input", () => { disp.textContent = fmtDtDisplay(inp.value, inp.type); });
+    }
+  });
 }
 const card = (inner, cls) => '<div class="card' + (cls ? " " + cls : "") + '">' + inner + '</div>';
 const stat = (v, l, cls) => '<div class="stat' + (cls ? " " + cls : "") + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></div>';
@@ -2559,7 +2615,7 @@ renderers.analytics = function () {
     card('<h3>ගණන් වැඩ කරනවාද?</h3>' +
       '<p class="hint">ගණන් ශුන්‍ය නම් බොහෝවිට `visits` rule එක deploy වී නැත. මෙය ඒක තහවුරු කරයි.</p>' +
       '<div class="row"><button class="btn primary sm" id="vProbe" type="button">පැමිණීම් ලිවීම පරීක්ෂා කරන්න</button></div>' +
-      '<pre id="vProbeOut" class="up-test" hidden></pre>') +
+      '<pre id="vProbeOut" class="up-test"' + (vProbeReport ? '>' + esc(vProbeReport) : ' hidden>') + '</pre>') +
     card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ස්ථිරවම මකා දමයි · දෙවරක් තහවුරු කරයි · Vercel එකේ FIREBASE_SERVICE_ACCOUNT_JSON සකසා නැත්නම් error එකක් පෙන්වයි</p>' +
       '<div class="row">' +
         '<button class="btn sm bad" id="rsQr"  type="button">QR ගණන ශුන්‍ය (' + S.by.qr + ')</button>' +
@@ -2587,8 +2643,24 @@ renderers.analytics = function () {
   /* Definitive answer to "why is nothing being counted?" — write a real probe
      row exactly as the public site does, then read back the precise outcome. */
   if ($("#vProbe")) $("#vProbe").onclick = async () => {
-    const out = $("#vProbeOut"); const btn = $("#vProbe");
-    out.hidden = false; out.textContent = "පරීක්ෂා කරමින්…"; btn.disabled = true;
+    /* This click writes to /visits, which the live onSnapshot listener
+       driving this whole panel (see connect()) reacts to immediately by
+       calling refresh("analytics") -- rebuilding #p-analytics's entire
+       innerHTML, this exact <pre>/<button> included, at some point during
+       or after this function runs, not just possibly before it starts.
+       Two things follow from that: DOM references grabbed once and reused
+       later can end up pointing at nodes already detached from the
+       document (fixed by re-querying by id, below), and even a correctly
+       re-queried final write can still be wiped by a LATER, unrelated
+       re-render if nothing survives it -- which is why the actual source
+       of truth is vProbeReport (declared near upTestReport/pubDirReport,
+       same pattern): the template above reads from it on every render, so
+       whichever render happens to be live always shows the right thing,
+       not just the one this handler happened to touch directly. */
+    vProbeReport = "පරීක්ෂා කරමින්…";
+    let out = $("#vProbeOut"); let btn = $("#vProbe");
+    if (out) { out.hidden = false; out.textContent = vProbeReport; }
+    if (btn) btn.disabled = true;
     const p2 = (n) => String(n).padStart(2, "0");
     const d = new Date();
     const day = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
@@ -2622,8 +2694,10 @@ renderers.analytics = function () {
         lines.push("අන්තර්ජාල සම්බන්ධතාවය සහ Firebase වින්‍යාසය පරීක්ෂා කරන්න.");
       }
     }
-    out.textContent = lines.join("\n");
-    btn.disabled = false;
+    vProbeReport = lines.join("\n");
+    out = $("#vProbeOut"); btn = $("#vProbe"); // re-query: the write above may already have triggered a re-render
+    if (out) { out.hidden = false; out.textContent = vProbeReport; }
+    if (btn) btn.disabled = false;
   };
   if ($("#rsQr"))  $("#rsQr").onclick  = () => resetVisits("qr");
   if ($("#rsWeb")) $("#rsWeb").onclick = () => resetVisits("web");

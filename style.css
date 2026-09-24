@@ -277,6 +277,46 @@ textarea.inp{ resize:vertical; min-height:82px; line-height:1.6; }
 select.inp{ appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--gold-2) 50%),linear-gradient(135deg,var(--gold-2) 50%,transparent 50%); background-position:calc(100% - 18px) center,calc(100% - 13px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-inline-end:2.2em; }
 .inp::placeholder{ color:var(--faint); }
 input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-scheme:dark; }
+/* Two separate real fixes for this same field -- the ::-webkit-datetime-edit
+   pseudo-element overrides below, then -webkit-appearance:none -- each one
+   rendered correctly in Chromium (this sandbox's only browser engine) but
+   was confirmed broken again on real Safari from a fresh screenshot, each
+   time well after that fix had already deployed to production. Both were
+   attempts at asking Safari's own native multi-part date/time widget to
+   paint itself differently; the actual bug lives entirely inside that
+   native rendering path, which nothing in this stylesheet has reliably
+   been able to win against.
+
+   dt-wrap/dt-native/dt-display (used by fld() in app.js for every date/
+   time/datetime-local field) sidesteps the fight instead of continuing it:
+   the real <input class="dt-native"> stays fully present and functional --
+   still receives clicks, still opens the native picker, still IS the value
+   the rest of the app reads/writes -- but is invisible at rest
+   (opacity:0), so whatever Safari privately decides to paint inside it
+   stops mattering at all. What the admin actually sees at rest is
+   .dt-display, an ordinary sibling <div> with no native form-control
+   rendering involved -- nothing here CAN go wrong the way the input's own
+   internals did -- kept in sync with the input's value by app.js
+   (syncDtDisplays()). .dt-wrap itself supplies the visible box (background/
+   border) at rest, since the invisible input can no longer be trusted to
+   paint its own reliably. On focus the roles swap: .dt-display hides and
+   the real input becomes visible, so its native editing UI (segment
+   highlighting, the picker popup) works exactly as it always has --
+   untouched, since every report so far has confirmed the FOCUSED state
+   already looks and works correctly; only "at rest" was ever broken. */
+.dt-wrap{
+  position:relative; border-radius:var(--r-sm);
+  background:rgba(255,255,255,.038); border:1px solid var(--line-soft);
+  transition:.24s var(--ease);
+}
+.dt-wrap:hover{ border-color:var(--line); }
+input.dt-native{ position:relative; z-index:1; background:transparent; border-color:transparent; }
+input.dt-native:not(:focus){ opacity:0; }
+.dt-display{
+  position:absolute; inset:0; z-index:0; display:flex; align-items:center;
+  padding:.74em .9em; pointer-events:none; color:var(--ink); font-size:.92rem;
+}
+.dt-wrap:focus-within .dt-display{ display:none; }
 /* Reported again, from a fresh screenshot taken well after the
    ::-webkit-datetime-edit rules below had already deployed to production:
    real Safari (confirmed only reachable/testable there -- this sandbox's
