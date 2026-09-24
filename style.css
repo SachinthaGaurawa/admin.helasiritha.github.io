@@ -434,7 +434,7 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator{
 input[type=date].inp::-webkit-calendar-picker-indicator:hover,
 input[type=time].inp::-webkit-calendar-picker-indicator:hover,
 input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity:1; }
-.inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(255,255,255,.015); }
+.inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(207,216,228,1); }
 
 /* ── time-boxed PIN lock bar (මංගල තොරතුරු) ── */
 .lock-bar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 20px; }
