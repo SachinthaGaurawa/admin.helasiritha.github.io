@@ -260,6 +260,60 @@ textarea.inp{ resize:vertical; min-height:82px; line-height:1.6; }
 select.inp{ appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--gold-2) 50%),linear-gradient(135deg,var(--gold-2) 50%,transparent 50%); background-position:calc(100% - 18px) center,calc(100% - 13px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-inline-end:2.2em; }
 .inp::placeholder{ color:var(--faint); }
 input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-scheme:dark; }
+/* color-scheme:dark above is only a HINT that these controls' native UI
+   should use a dark palette -- confirmed directly, from a screenshot, that
+   Safari/WebKit still rendered this field's actual editable text and
+   background pale/white while unfocused (it only picked up the page's dark
+   theme once clicked, because focus/active styling comes from THIS
+   stylesheet's own :focus rule above, not from the browser). date/time/
+   datetime-local controls expose their real editable text through their
+   own UA-shadow pseudo-elements (::-webkit-datetime-edit and its per-field
+   children) that ordinary background/color rules on the host <input> never
+   reach in Safari, and Chromium inherited the exact same -webkit- prefixed
+   pseudo-element set, so this fixes both engines identically -- not a
+   Safari-only patch. This is what actually makes it read correctly at
+   rest, not just once interacted with, on every device/browser this class
+   is used on. */
+input[type=date].inp::-webkit-datetime-edit,
+input[type=time].inp::-webkit-datetime-edit,
+input[type=datetime-local].inp::-webkit-datetime-edit{ color:var(--ink); }
+input[type=date].inp::-webkit-datetime-edit-fields-wrapper,
+input[type=time].inp::-webkit-datetime-edit-fields-wrapper,
+input[type=datetime-local].inp::-webkit-datetime-edit-fields-wrapper{ background:transparent; }
+input[type=date].inp::-webkit-datetime-edit-text,
+input[type=date].inp::-webkit-datetime-edit-month-field,
+input[type=date].inp::-webkit-datetime-edit-day-field,
+input[type=date].inp::-webkit-datetime-edit-year-field,
+input[type=time].inp::-webkit-datetime-edit-text,
+input[type=time].inp::-webkit-datetime-edit-hour-field,
+input[type=time].inp::-webkit-datetime-edit-minute-field,
+input[type=time].inp::-webkit-datetime-edit-ampm-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-text,
+input[type=datetime-local].inp::-webkit-datetime-edit-month-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-day-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-year-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-hour-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-minute-field,
+input[type=datetime-local].inp::-webkit-datetime-edit-ampm-field{
+  /* -webkit-text-fill-color, not just color: the same Safari quirk that
+     ignores color on these sub-elements outright (rather than just
+     defaulting it) is the one other form controls hit with autofill —
+     -webkit-text-fill-color is the property that actually wins there. */
+  color:var(--ink); -webkit-text-fill-color:var(--ink);
+}
+/* The picker-icon glyph itself is a fixed dark-on-transparent asset that
+   color-scheme:dark is supposed to flip for a dark background -- also
+   confirmed not reliably happening. invert+brighten reads correctly
+   against this theme's dark fields regardless of whether the browser's
+   own flip kicks in. */
+input[type=date].inp::-webkit-calendar-picker-indicator,
+input[type=time].inp::-webkit-calendar-picker-indicator,
+input[type=datetime-local].inp::-webkit-calendar-picker-indicator{
+  filter:invert(.8) brightness(1.4); opacity:.85; cursor:pointer;
+}
+input[type=date].inp::-webkit-calendar-picker-indicator:hover,
+input[type=time].inp::-webkit-calendar-picker-indicator:hover,
+input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity:1; }
 .inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(255,255,255,.015); }
 
 /* ── time-boxed PIN lock bar (මංගල තොරතුරු) ── */
