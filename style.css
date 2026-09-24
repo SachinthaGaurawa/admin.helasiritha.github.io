@@ -88,7 +88,7 @@ button,input,select,textarea{ font-family:inherit; font-size:inherit; color:inhe
 .login-crest{
   width:88px; height:88px; margin:0 auto 18px; border-radius:50%; overflow:hidden;
   display:grid; place-items:center; background:linear-gradient(140deg,#F4E3B6,#C9A35C 52%,#9C7538);
-  box-shadow:0 14px 34px -14px rgba(232,201,135,.75), 0 0 0 1px rgba(255,255,255,.14),
+  box-shadow:0 14px 34px -14px rgba(232,201,135,.75), 0 0 0 1px rgba(155,164,158,1.0),
              0 0 0 7px rgba(232,201,135,.09);
   animation:crestFloat 6s var(--ease-soft) infinite;
 }
@@ -392,7 +392,7 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator{
 input[type=date].inp::-webkit-calendar-picker-indicator:hover,
 input[type=time].inp::-webkit-calendar-picker-indicator:hover,
 input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity:1; }
-.inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(155,164,158,1.0); }
+.inp:disabled{ opacity:.5; cursor:not-allowed; background:rgba(255,255,255,.015); }
 
 /* ── time-boxed PIN lock bar (මංගල තොරතුරු) ── */
 .lock-bar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 20px; }
