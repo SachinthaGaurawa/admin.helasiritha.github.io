@@ -463,6 +463,12 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity
 .btn.xs{ padding:.36em .72em; font-size:.74rem; }
 .btn.icon{ padding:.5em; width:34px; height:34px; }
 .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+/* AI sentence/phrase translation button + result status, directly under
+   each sentence/phrase trio (see wireAiTrio() in app.js) -- deliberately
+   NOT styled like the name-trio's plain hint text: this is an action the
+   admin takes on demand, not passive auto-fill, so it gets its own row. */
+.ai-tri-row{ display:flex; align-items:center; gap:12px; margin:-6px 0 14px; flex-wrap:wrap; }
+.ai-tri-status{ font-size:.8rem; color:var(--mut); }
 .saved{ font-size:.8rem; color:var(--ok); font-weight:700; opacity:0; transform:translateX(-6px); transition:.35s var(--ease); }
 .saved.show{ opacity:1; transform:none; }
 
