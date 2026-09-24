@@ -45,7 +45,7 @@ service cloud.firestore {
 
     // ── /guests/{guestId} ────────────────────────────────────────────────
     // Admin-managed roster — the FULL record (name, family, side, status,
-    // liquor, dietary, tableNumber, count). Admin-only, both read and write:
+    // tableNumber, count). Admin-only, both read and write:
     // this is exactly the private data the public site must never see.
     match /guests/{guestId} {
       allow read, write: if isAdmin();
@@ -67,8 +67,8 @@ service cloud.firestore {
     // added, edited or removed (see app.js addGuest/updGuest/delGuest and
     // the "Rebuild directory" tool in the Security panel). This is the only
     // guest data the public RSVP page ever reads, so a visitor can find
-    // their own name without ever seeing anyone's RSVP status, liquor
-    // preference, dietary notes or table assignment.
+    // their own name without ever seeing anyone's RSVP status or table
+    // assignment.
     match /guestsPublic/{guestId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -90,9 +90,7 @@ service cloud.firestore {
         && d.family  is string && d.family.size() <= 200
         && d.side    is string && d.side.size()   <= 60
         && d.attending is bool
-        && d.liquor    is bool
-        && d.party  is number && d.party  >= 0 && d.party  <= 20
-        && d.dietary is string && d.dietary.size() <= 300;
+        && d.party  is number && d.party  >= 0 && d.party  <= 20;
     }
 
     // ── /blessings/{id} ──────────────────────────────────────────────────
