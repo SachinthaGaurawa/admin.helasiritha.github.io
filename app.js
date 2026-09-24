@@ -71,6 +71,37 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
+/* Public reCAPTCHA Enterprise site key for Firebase App Check -- same key
+   already wired into the public site's app.js (see the comment there for
+   the full reasoning: no matching "secret key" for this integration,
+   Firebase's own backend verifies against this same Google Cloud project
+   directly). admin-helasiritha.vercel.app has to be added to this key's
+   own domain allowlist (Google Cloud Console -> the key -> Edit -> Domain
+   list) for tokens from THIS panel to validate -- the public site's
+   domains being listed there doesn't cover this one.
+   Admin writes are already gated by Firebase Auth + the single hard-coded
+   ADMIN_EMAIL (Firestore rules' isAdmin()), a stronger, identity-based
+   check than App Check provides on its own -- this is deliberate defense
+   in depth on top of that, not filling a gap the way it did for the
+   public site's unauthenticated RSVP/blessing/visit write paths. Fire-
+   and-forget: db above is already usable synchronously regardless of
+   whether this resolves, fails, or is slow -- same "must never be able
+   to break the panel" reasoning as the public site's own isolated
+   try/catch, and the same real robustness risk that reasoning exists for
+   (an ad-blocker or flaky connection failing to load reCAPTCHA's own
+   script must never take Firestore/Auth down with it here either). */
+const APP_CHECK_SITE_KEY = "6LfksswtAAAAADCY0dX--_9c5l93Ziqa9T-R1vRn";
+if (APP_CHECK_SITE_KEY) {
+  import("https://www.gstatic.com/firebasejs/12.14.0/firebase-app-check.js")
+    .then((appCheck) => {
+      appCheck.initializeAppCheck(app, {
+        provider: new appCheck.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+    })
+    .catch((e) => console.warn("App Check init failed", e));
+}
+
 /* ── micro helpers ───────────────────────────────────────────────────────── */
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
