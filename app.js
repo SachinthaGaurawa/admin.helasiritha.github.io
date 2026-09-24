@@ -68,6 +68,11 @@ const SIGN_ENDPOINT = "/api/sign-upload";
    server-side endpoint at all (Firestore rules block every client delete
    on /visits unconditionally, admin included). */
 const RESET_VISITS_ENDPOINT = "/api/reset-visits";
+/* Same story again -- see transliterate.js's own header comment for the
+   full reasoning (auto-generating linked Sinhala/English/Tamil name
+   variants so the public RSVP search works regardless of which script a
+   guest types their own name in). */
+const TRANSLITERATE_ENDPOINT = "/api/transliterate";
 const IDLE_LOGOUT_MS = 20 * 60 * 1000;   // auto sign-out after 20 min idle
 const VISIT_KINDS = ["qr", "web", "direct"];
 
@@ -964,26 +969,31 @@ function saveTheme(t, keepPrev) {
   }
   return withAudit(setDoc(doc(db, "site", "theme"), payload, { merge: true }), "theme.save", t.primary || "");
 }
-/* `guestsPublic/{id}` mirrors ONLY {name, family, side} out of `guests/{id}`.
-   The public site reads that mirror (never the full `guests` doc) so a
-   visitor can never see another guest's status/table —
-   see firestore.rules. Every guest-mutating path below keeps it in sync;
+/* `guestsPublic/{id}` mirrors {name, family, side} plus the Sinhala/English/
+   Tamil search variants (nameSi/nameEn/nameTa/familySi/familyEn/familyTa --
+   see wireNameTrio()/nameVariants() for how those get generated) out of
+   `guests/{id}`. The public site reads that mirror (never the full `guests`
+   doc) so a visitor can never see another guest's status/table — see
+   firestore.rules. Every guest-mutating path below keeps it in sync;
    "Rebuild directory" in the Security panel repairs it if it ever drifts. */
+const GUEST_MIRROR_FIELDS = ["name", "nameSi", "nameEn", "nameTa", "family", "familySi", "familyEn", "familyTa", "side"];
+function mirrorFieldsFrom(o) {
+  const pub = {};
+  GUEST_MIRROR_FIELDS.forEach(k => { if (k in o) pub[k] = o[k] || ""; });
+  return pub;
+}
 function addGuest(o) {
   const ref = doc(collection(db, "guests"));
   const batch = writeBatch(db);
   batch.set(ref, Object.assign({ ts: serverTimestamp() }, o));
-  batch.set(doc(db, "guestsPublic", ref.id), { name: o.name || "", family: o.family || "", side: o.side || "" });
+  batch.set(doc(db, "guestsPublic", ref.id), mirrorFieldsFrom(o));
   return withAudit(batch.commit(), "guest.add", o.name);
 }
 function updGuest(id, o) {
   const p = updateDoc(doc(db, "guests", id), o);
-  const pub = {};
-  if ("name" in o) pub.name = o.name || "";
-  if ("family" in o) pub.family = o.family || "";
-  if ("side" in o) pub.side = o.side || "";
-  /* Both the primary write and the guestsPublic mirror (when name/family/side
-     changed) are chained into ONE promise, so a caller's .catch sees a
+  const pub = mirrorFieldsFrom(o);
+  /* Both the primary write and the guestsPublic mirror (when any mirrored
+     field changed) are chained into ONE promise, so a caller's .catch sees a
      failure in either — previously the mirror write's own failure was
      invisible (nothing awaited or checked it), silently drifting the public
      search directory out of sync with the real guest record. */
@@ -1190,6 +1200,196 @@ function syncDtDisplays() {
       inp.addEventListener("input", () => { disp.textContent = fmtDtDisplay(inp.value, inp.type); });
     }
   });
+}
+
+/* ═══════════════════════ NAME TRANSLITERATION ═══════════════════════════════
+   A guest's name typed in only one script (English, Sinhala or Tamil) is
+   invisible to the public RSVP search when a guest searches in a different
+   one -- confirmed as a real, reported bug. The fix: every guest-name field
+   in this admin panel generates all THREE linked variants automatically as
+   the admin types in any one of them (see wireNameTrio() below), storing all
+   three so the public search can match any of them -- always left editable
+   before saving, since no automated system gets every name exactly right.
+
+   Two different mechanisms cover the two directions, because they have very
+   different accuracy characteristics:
+   - English → Sinhala/Tamil: proxied through Google's public "Input Tools"
+     phonetic transliteration service (see /api/transliterate.js) -- the
+     same well-established engine behind most "type English, get Sinhala/
+     Tamil Unicode" web tools, generally quite reliable for common names.
+   - Sinhala/Tamil → English: no equivalent free, reliable API exists for
+     this direction (there is no single "correct" romanization of a native-
+     script name -- multiple spellings are all legitimate). Handled instead
+     by the rule-based, character-by-character phonetic mapping below --
+     deterministic, needs no network call, and honest about being a best
+     first guess rather than an authoritative answer. */
+function scriptOf(text) {
+  if (/[඀-෿]/.test(text)) return "si";
+  if (/[஀-௿]/.test(text)) return "ta";
+  if (/[A-Za-z]/.test(text)) return "en";
+  return "en";
+}
+/* Sinhala consonants (base glyph carries an inherent "a"), independent
+   vowels, and dependent vowel signs (replace the inherent "a" when they
+   follow a consonant) -- common practical romanization, not strict ISO
+   15919, since a guest reading this back is more likely to recognize
+   "Perera" than "Perērā". */
+const SI_CONSONANTS = {
+  "ක": "k", "ඛ": "kh", "ග": "g", "ඝ": "gh", "ඞ": "ng", "ඟ": "ng",
+  "ච": "ch", "ඡ": "chh", "ජ": "j", "ඣ": "jh", "ඤ": "ny", "ඥ": "gn",
+  "ට": "t", "ඨ": "th", "ඩ": "d", "ඪ": "dh", "ණ": "n",
+  "ත": "th", "ථ": "th", "ද": "d", "ධ": "dh", "න": "n",
+  "ප": "p", "ඵ": "ph", "බ": "b", "භ": "bh", "ම": "m",
+  "ය": "y", "ර": "r", "ල": "l", "ව": "v", "ශ": "sh", "ෂ": "sh",
+  "ස": "s", "හ": "h", "ළ": "l", "ෆ": "f"
+};
+const SI_INDEP_VOWELS = {
+  "අ": "a", "ආ": "a", "ඇ": "a", "ඈ": "a", "ඉ": "i", "ඊ": "i",
+  "උ": "u", "ඌ": "u", "ඍ": "ri", "එ": "e", "ඒ": "e", "ඓ": "ai",
+  "ඔ": "o", "ඕ": "o", "ඖ": "au"
+};
+/* Long/short vowel-length distinctions (ා vs ැ, ී vs ි, etc.) collapse to
+   the SAME romanization -- confirmed against real names (පෙරේරා should
+   read back "Perera", not "Pereeraa") that Sri Lankan English name
+   spelling essentially never marks vowel length; doubling it here made
+   otherwise-perfect romanizations look wrong for the overwhelming common
+   case, which matters more than technical precision for a name field. */
+const SI_VOWEL_SIGNS = {
+  "ා": "a", "ැ": "a", "ෑ": "a", "ි": "i", "ී": "i", "ු": "u",
+  "ූ": "u", "ෘ": "ri", "ෙ": "e", "ේ": "e", "ෛ": "ai",
+  "ො": "o", "ෝ": "o", "ෞ": "au"
+};
+const SI_VIRAMA = "්"; // ්
+/* Tamil consonants, independent vowels and dependent vowel signs -- same
+   practical-spelling approach as Sinhala above. */
+/* ச defaults to "s" rather than the more formal/ISO "ch" -- for personal
+   names specifically ("Siva", "Selvam", "Senthil") the "s"-like reading is
+   by far the more common English spelling in practice, even though ச is
+   genuinely ambiguous between the two across different words. */
+const TA_CONSONANTS = {
+  "க": "k", "ங": "ng", "ச": "s", "ஞ": "ny", "ட": "t", "ண": "n",
+  "த": "th", "ந": "n", "ப": "p", "ம": "m", "ய": "y", "ர": "r",
+  "ல": "l", "வ": "v", "ழ": "zh", "ள": "l", "ற": "r", "ன": "n",
+  "ஜ": "j", "ஷ": "sh", "ஸ": "s", "ஹ": "h"
+};
+const TA_INDEP_VOWELS = {
+  "அ": "a", "ஆ": "a", "இ": "i", "ஈ": "i", "உ": "u", "ஊ": "u",
+  "எ": "e", "ஏ": "e", "ஐ": "ai", "ஒ": "o", "ஓ": "o", "ஔ": "au"
+};
+/* Same vowel-length collapse as SI_VOWEL_SIGNS above, same reasoning. */
+const TA_VOWEL_SIGNS = {
+  "ா": "a", "ி": "i", "ீ": "i", "ு": "u", "ூ": "u",
+  "ெ": "e", "ே": "e", "ை": "ai", "ொ": "o", "ோ": "o", "ௌ": "au"
+};
+const TA_VIRAMA = "்"; // ்
+/* Shared algorithm for both scripts: walk character by character. A
+   consonant carries an inherent "a" UNLESS immediately followed by a vowel
+   sign (use that vowel instead) or a virama (drop the vowel entirely --
+   the consonant is a bare stop). Anything unrecognized (spaces, existing
+   Latin characters in a mixed-script name, punctuation) passes through
+   unchanged. */
+function nativeToRoman(text, consonants, vowelSigns, indepVowels, virama) {
+  let out = "", i = 0;
+  const chars = Array.from(text);
+  while (i < chars.length) {
+    const c = chars[i];
+    if (consonants[c]) {
+      const next = chars[i + 1];
+      if (next === virama) { out += consonants[c]; i += 2; continue; }
+      if (next && vowelSigns[next]) { out += consonants[c] + vowelSigns[next]; i += 2; continue; }
+      out += consonants[c] + "a"; i += 1; continue;
+    }
+    if (indepVowels[c]) { out += indepVowels[c]; i += 1; continue; }
+    out += c; i += 1;
+  }
+  /* Title-case each word -- a bare romanization comes out all lowercase,
+     which reads oddly for a proper name. */
+  return out.replace(/\b\w/g, ch => ch.toUpperCase());
+}
+const siToEn = (text) => nativeToRoman(text, SI_CONSONANTS, SI_VOWEL_SIGNS, SI_INDEP_VOWELS, SI_VIRAMA);
+const taToEn = (text) => nativeToRoman(text, TA_CONSONANTS, TA_VOWEL_SIGNS, TA_INDEP_VOWELS, TA_VIRAMA);
+
+/* English (Latin) → Sinhala/Tamil, via the server-side proxy to Google's
+   Input Tools. Cached in-memory (never across reloads -- guest names are
+   short-lived form input, not worth persisting) since the same partial
+   name is re-transliterated on every keystroke as the admin types. */
+const transliterateCache = new Map();
+async function enToNative(text, lang) {
+  if (!text) return "";
+  const key = lang + ":" + text;
+  if (transliterateCache.has(key)) return transliterateCache.get(key);
+  try {
+    const u = auth.currentUser; if (!u) return "";
+    const token = await u.getIdToken();
+    const r = await fetch(TRANSLITERATE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify({ text, lang })
+    });
+    if (!r.ok) return "";
+    const j = await r.json();
+    const result = (j && j.ok && j.result) || "";
+    transliterateCache.set(key, result);
+    return result;
+  } catch (_) { return ""; }
+}
+/* Given text typed in ANY of the three scripts, return the other two --
+   the one entry point wireNameTrio() (below) actually calls. */
+async function nameVariants(text, srcLang) {
+  if (srcLang === "en") {
+    const [si, ta] = await Promise.all([enToNative(text, "si"), enToNative(text, "ta")]);
+    return { si, ta };
+  }
+  if (srcLang === "si") {
+    const en = siToEn(text);
+    const ta = en ? await enToNative(en, "ta") : "";
+    return { en, ta };
+  }
+  if (srcLang === "ta") {
+    const en = taToEn(text);
+    const si = en ? await enToNative(en, "si") : "";
+    return { en, si };
+  }
+  return {};
+}
+/* Wires one "primary" input (whichever script the admin actually types in)
+   to two sibling <input>s that receive the auto-generated variants. Only
+   fires after the admin pauses typing (debounced -- there is no reason to
+   hit the transliteration service on every single keystroke), and never
+   overwrites a sibling the admin has since edited by hand (tracked via
+   dataset.userEdited, set the moment that field's OWN input event fires
+   from a real keystroke rather than this function's own programmatic
+   write). ids: {en, si, ta} -- the three <input> element ids for one name
+   (either the guest's given name or family name). */
+function wireNameTrio(ids) {
+  const els = { en: $("#" + ids.en), si: $("#" + ids.si), ta: $("#" + ids.ta) };
+  if (!els.en || !els.si || !els.ta) return;
+  let debounceT = null;
+  Object.keys(els).forEach(lang => {
+    els[lang].addEventListener("input", () => {
+      els[lang].dataset.userEdited = "1";
+      clearTimeout(debounceT);
+      debounceT = setTimeout(async () => {
+        const text = els[lang].value.trim();
+        if (!text) return;
+        /* `lang` (this field's own designated script), not content-sniffed --
+           each of the three inputs already tells wireNameTrio which script it
+           holds; nameVariants() just needs to know which one changed. */
+        const variants = await nameVariants(text, lang);
+        Object.keys(variants).forEach(k => {
+          const el = els[k];
+          if (el && el !== els[lang] && !el.dataset.userEdited) el.value = variants[k];
+        });
+      }, 500);
+    });
+  });
+}
+/* Resets the "has the admin hand-edited this" tracking on a trio -- called
+   after a successful save/clear so the NEXT guest's name starts fresh
+   (otherwise a stale dataset.userEdited from the previous guest could
+   silently stop auto-fill from working on the next one). */
+function resetNameTrio(ids) {
+  [ids.en, ids.si, ids.ta].forEach(id => { const el = $("#" + id); if (el) { el.value = ""; delete el.dataset.userEdited; } });
 }
 const card = (inner, cls) => '<div class="card' + (cls ? " " + cls : "") + '">' + inner + '</div>';
 const stat = (v, l, cls) => '<div class="stat' + (cls ? " " + cls : "") + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></div>';
@@ -1435,7 +1635,15 @@ renderers.guests = function () {
 
   $("#p-guests").innerHTML =
     card('<h3>ආගන්තුකයෙකු එක් කරන්න</h3>' +
-      '<div class="grid2">' + fld("නම", "g_name", "") + fld("පවුලේ නාමය (විකල්ප)", "g_family", "") + '</div>' +
+      /* Any ONE of these three name fields can be typed in -- the other two
+         (name and family, each) auto-fill within a moment (see
+         wireNameTrio()) so the public RSVP search finds this guest no
+         matter which script they search in. All six stay editable; the
+         auto-fill is a strong first guess, not a final answer -- glance
+         over them before saving, especially for less common names. */
+      '<p class="hint">ඕනෑම එකක් type කරන්න — අනිත් භාෂා දෙකෙන්ම නම ස්වයංක්‍රීයව පුරවයි (පරීක්ෂා කර නිවැරදි කරන්න)</p>' +
+      '<div class="grid3">' + fld("නම — සිංහල", "g_name_si", "") + fld("නම — English", "g_name_en", "") + fld("නම — தமிழ்", "g_name_ta", "") + '</div>' +
+      '<div class="grid3">' + fld("පවුලේ නාමය — සිංහල (විකල්ප)", "g_family_si", "") + fld("පවුලේ නාමය — English (විකල්ප)", "g_family_en", "") + fld("පවුලේ නාමය — தமிழ் (විකල්ප)", "g_family_ta", "") + '</div>' +
       '<div class="grid2">' +
         '<div class="field"><label for="g_side">පාර්ශවය</label><select class="inp" id="g_side">' +
           '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
@@ -1488,16 +1696,29 @@ renderers.guests = function () {
   if ($("#pPrev")) $("#pPrev").onclick = () => { gFilter.page--; renderers.guests(); };
   if ($("#pNext")) $("#pNext").onclick = () => { gFilter.page++; renderers.guests(); };
 
+  wireNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
+  wireNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
   $("#gAdd").onclick = async () => {
-    const name = $("#g_name").value.trim();
+    const nameSi = $("#g_name_si").value.trim(), nameEn = $("#g_name_en").value.trim(), nameTa = $("#g_name_ta").value.trim();
+    const familySi = $("#g_family_si").value.trim(), familyEn = $("#g_family_en").value.trim(), familyTa = $("#g_family_ta").value.trim();
+    /* Sinhala-first, matching this admin panel's own language convention
+       throughout -- but falls through to whichever variant the admin
+       actually filled in, since not every field is guaranteed non-empty
+       (auto-fill can fail if the transliteration service is briefly
+       unreachable, and every field stays optional/editable regardless). */
+    const name = nameSi || nameEn || nameTa;
     if (!name) { toast("නම ඇතුළත් කරන්න", "warn"); return; }
     try {
       await addGuest({
-        name, family: $("#g_family").value.trim(), side: $("#g_side").value,
+        name, nameSi, nameEn, nameTa,
+        family: familySi || familyEn || familyTa, familySi, familyEn, familyTa,
+        side: $("#g_side").value,
         count: clampInt($("#g_count").value, 1, 40), status: "pending",
         tableNumber: null
       });
-      $("#g_name").value = ""; $("#g_family").value = ""; $("#g_count").value = "1";
+      resetNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
+      resetNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
+      $("#g_count").value = "1";
       toast("ආගන්තුකයා එක් විය ✓", "ok");
     } catch (e) { toast("එක් කිරීම අසාර්ථකයි", "err"); }
   };
@@ -1509,8 +1730,40 @@ renderers.guests = function () {
      the field kept showing whatever the admin typed — LOOKING saved while
      silently not being. .k-status/.k-liq below already got this right;
      matched that same try/catch + error-toast pattern here. */
-  bind(".k-name", async el => { try { await updGuest(el.dataset.id, { name: el.value.trim() }); toast("නම යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
-  bind(".k-fam",  async el => { try { await updGuest(el.dataset.id, { family: el.value.trim() }); toast("පවුල යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  /* This compact table has room for one name field, not three -- typing a
+     correction here still regenerates all three search variants in the
+     background (script auto-detected from whatever was typed), so an
+     inline fix here doesn't quietly leave the OTHER two languages stale
+     and unsearchable. Best-effort, same as everywhere else this runs;
+     the full three-field form above is still there for a careful review. */
+  bind(".k-name", async el => {
+    const text = el.value.trim();
+    try {
+      const patch = { name: text };
+      const lang = scriptOf(text);
+      patch["name" + lang[0].toUpperCase() + lang.slice(1)] = text;
+      const variants = await nameVariants(text, lang);
+      Object.keys(variants).forEach(k => { patch["name" + k[0].toUpperCase() + k.slice(1)] = variants[k]; });
+      await updGuest(el.dataset.id, patch);
+      toast("නම යාවත්කාලීනයි", "ok");
+    } catch (e) { toast("දෝෂයකි", "err"); }
+  });
+  bind(".k-fam", async el => {
+    const text = el.value.trim();
+    try {
+      const patch = { family: text };
+      if (text) {
+        const lang = scriptOf(text);
+        patch["family" + lang[0].toUpperCase() + lang.slice(1)] = text;
+        const variants = await nameVariants(text, lang);
+        Object.keys(variants).forEach(k => { patch["family" + k[0].toUpperCase() + k.slice(1)] = variants[k]; });
+      } else {
+        patch.familySi = ""; patch.familyEn = ""; patch.familyTa = "";
+      }
+      await updGuest(el.dataset.id, patch);
+      toast("පවුල යාවත්කාලීනයි", "ok");
+    } catch (e) { toast("දෝෂයකි", "err"); }
+  });
   bind(".k-side", async el => { try { await updGuest(el.dataset.id, { side: el.value }); toast("පාර්ශවය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-count", async el => { try { await updGuest(el.dataset.id, { count: clampInt(el.value, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-table", async el => { const v = el.value ? clampInt(el.value, 1, 99) : null; try { await updGuest(el.dataset.id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
@@ -1567,24 +1820,59 @@ renderers.guests = function () {
     }
     return out;
   };
+  /* Bulk-imported rows carry a name/family in whatever ONE script the
+     source spreadsheet happened to use -- same underlying problem as a
+     single guest typed by hand, at row-count scale. Best-effort variant
+     generation runs for every row (script auto-detected per field), same
+     mechanism as the single-guest form and the inline table edit, just
+     with no per-row review possible before saving -- a bulk import this
+     size was never going to get individual eyeballing anyway, and this is
+     still a real improvement over leaving two-thirds of the guest list
+     unsearchable in their own language. Bounded concurrency (8 rows at a
+     time) keeps this reasonably fast without hammering the
+     transliteration endpoint with hundreds of simultaneous requests. */
+  async function withVariants(text) {
+    if (!text) return { name: "", si: "", en: "", ta: "" };
+    const lang = scriptOf(text);
+    const seed = { si: "", en: "", ta: "" }; seed[lang] = text;
+    const rest = await nameVariants(text, lang);
+    Object.assign(seed, rest);
+    return { name: text, si: seed.si, en: seed.en, ta: seed.ta };
+  }
+  async function mapWithConcurrency(items, limit, fn) {
+    const out = new Array(items.length);
+    let i = 0;
+    async function worker() { while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx]); } }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return out;
+  }
   const importRows = async (rows) => {
     const side = $("#bk_side").value;
     const clean = (rows || []).filter(r => r && r.name);
     if (!clean.length) { toast("දත්ත හමු නොවීය", "warn"); return; }
-    const btn = $("#bkAdd"); btn.disabled = true; btn.textContent = "ආයාත කරමින්…";
+    const btn = $("#bkAdd"); btn.disabled = true; btn.textContent = "නම් පරිවර්තනය කරමින්…";
     try {
+      const resolved = await mapWithConcurrency(clean, 8, async (r) => {
+        const [n, f] = await Promise.all([withVariants(r.name), withVariants(r.family || "")]);
+        return { n, f, count: r.count };
+      });
+      btn.textContent = "ආයාත කරමින්…";
       /* Each guest now costs 2 writes (guests + its guestsPublic mirror), so the
          chunk size is halved from Firestore's 500-write batch ceiling. */
       let n = 0;
-      for (let i = 0; i < clean.length; i += 240) {
+      for (let i = 0; i < resolved.length; i += 240) {
         const batch = writeBatch(db);
-        clean.slice(i, i + 240).forEach(r => {
+        resolved.slice(i, i + 240).forEach(r => {
           const ref = doc(collection(db, "guests"));
           batch.set(ref, {
-            name: r.name, family: r.family || "", side, count: r.count,
-            status: "pending", tableNumber: null, ts: serverTimestamp()
+            name: r.n.name, nameSi: r.n.si, nameEn: r.n.en, nameTa: r.n.ta,
+            family: r.f.name, familySi: r.f.si, familyEn: r.f.en, familyTa: r.f.ta,
+            side, count: r.count, status: "pending", tableNumber: null, ts: serverTimestamp()
           });
-          batch.set(doc(db, "guestsPublic", ref.id), { name: r.name, family: r.family || "", side });
+          batch.set(doc(db, "guestsPublic", ref.id), {
+            name: r.n.name, nameSi: r.n.si, nameEn: r.n.en, nameTa: r.n.ta,
+            family: r.f.name, familySi: r.f.si, familyEn: r.f.en, familyTa: r.f.ta, side
+          });
           n++;
         });
         await batch.commit();
@@ -3011,7 +3299,7 @@ renderers.security = function () {
       for (let i = 0; i < guests.length; i += 400) {
         const batch = writeBatch(db);
         guests.slice(i, i + 400).forEach(g => {
-          batch.set(doc(db, "guestsPublic", g.id), { name: g.name || "", family: g.family || "", side: g.side || "" });
+          batch.set(doc(db, "guestsPublic", g.id), mirrorFieldsFrom(g));
           n++;
         });
         await batch.commit();
