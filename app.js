@@ -1381,7 +1381,22 @@ async function enToNative(text, lang) {
 }
 /* Given text typed in ANY of the three scripts, return the other two --
    the one entry point wireNameTrio() (below) actually calls. */
+/* Zero-width formatting characters (ZWJ/ZWNJ especially) are a normal,
+   invisible part of how some Sinhala/Tamil virtual keyboards compose
+   certain letter combinations while typing -- confirmed as the actual
+   cause of a reported bug: "ගෞරව" romanized to "GauraVa" (a stray capital
+   mid-word), because nativeToRoman()'s per-character walk copied the
+   invisible ZWJ straight into the output, which then split the later
+   title-case regex's word-boundary matching into two separate "words".
+   Chained further, that same mangled text going into the EN→TA Google
+   Input Tools call read as two words too, producing outright garbled
+   Tamil. None of these characters carry any sound of their own -- they
+   only ever affect how the ORIGINAL script's glyphs render -- so it is
+   always safe to drop them before romanizing or sending text anywhere. */
+const ZERO_WIDTH_RE = /[​‌‍﻿]/g;
+const stripZW = (s) => String(s || "").replace(ZERO_WIDTH_RE, "");
 async function nameVariants(text, srcLang) {
+  text = text.replace(ZERO_WIDTH_RE, "");
   if (srcLang === "en") {
     const [si, ta] = await Promise.all([enToNative(text, "si"), enToNative(text, "ta")]);
     return { si, ta };
@@ -1770,8 +1785,8 @@ renderers.guests = function () {
   wireNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
   wireNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
   $("#gAdd").onclick = async () => {
-    const nameSi = $("#g_name_si").value.trim(), nameEn = $("#g_name_en").value.trim(), nameTa = $("#g_name_ta").value.trim();
-    const familySi = $("#g_family_si").value.trim(), familyEn = $("#g_family_en").value.trim(), familyTa = $("#g_family_ta").value.trim();
+    const nameSi = stripZW($("#g_name_si").value.trim()), nameEn = stripZW($("#g_name_en").value.trim()), nameTa = stripZW($("#g_name_ta").value.trim());
+    const familySi = stripZW($("#g_family_si").value.trim()), familyEn = stripZW($("#g_family_en").value.trim()), familyTa = stripZW($("#g_family_ta").value.trim());
     /* Sinhala-first, matching this admin panel's own language convention
        throughout -- but falls through to whichever variant the admin
        actually filled in, since not every field is guaranteed non-empty
@@ -1809,7 +1824,7 @@ renderers.guests = function () {
      and unsearchable. Best-effort, same as everywhere else this runs;
      the full three-field form above is still there for a careful review. */
   bind(".k-name", async el => {
-    const text = el.value.trim();
+    const text = stripZW(el.value.trim());
     try {
       const patch = { name: text };
       const lang = scriptOf(text);
@@ -1821,7 +1836,7 @@ renderers.guests = function () {
     } catch (e) { toast("දෝෂයකි", "err"); }
   });
   bind(".k-fam", async el => {
-    const text = el.value.trim();
+    const text = stripZW(el.value.trim());
     try {
       const patch = { family: text };
       if (text) {
@@ -1904,6 +1919,7 @@ renderers.guests = function () {
      time) keeps this reasonably fast without hammering the
      transliteration endpoint with hundreds of simultaneous requests. */
   async function withVariants(text) {
+    text = text.replace(ZERO_WIDTH_RE, "");
     if (!text) return { name: "", si: "", en: "", ta: "" };
     const lang = scriptOf(text);
     const seed = { si: "", en: "", ta: "" }; seed[lang] = text;
