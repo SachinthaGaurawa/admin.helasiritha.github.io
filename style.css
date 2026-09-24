@@ -260,6 +260,27 @@ textarea.inp{ resize:vertical; min-height:82px; line-height:1.6; }
 select.inp{ appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--gold-2) 50%),linear-gradient(135deg,var(--gold-2) 50%,transparent 50%); background-position:calc(100% - 18px) center,calc(100% - 13px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-inline-end:2.2em; }
 .inp::placeholder{ color:var(--faint); }
 input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{ color-scheme:dark; }
+/* Reported again, from a fresh screenshot taken well after the
+   ::-webkit-datetime-edit rules below had already deployed to production:
+   real Safari (confirmed only reachable/testable there -- this sandbox's
+   only available browser engine is Chromium, where those rules DID already
+   render correctly, which is exactly why this slipped through) still
+   painted the field itself pale/white at rest regardless. The pseudo-
+   element rules below are kept (harmless, and they're what Chromium relies
+   on), but the actually reliable fix for Safari specifically is this:
+   stop asking Safari's native field-chrome renderer to respect a dark
+   background at all, since it demonstrably won't, and remove that
+   renderer instead. -webkit-appearance:none opts the box itself out of
+   Safari's native control painting, so it falls back to being an ordinary
+   CSS box -- .inp's own background/color/border above then apply directly,
+   the same way they already do for a plain text input, with no native
+   chrome left to fight. The calendar/clock picker icon and tapping the
+   field to open the native picker are unaffected -- appearance:none only
+   changes how the box ITSELF paints, not the separate picker-indicator
+   sub-element or the field's click/focus behavior. */
+input[type=date].inp,input[type=time].inp,input[type=datetime-local].inp{
+  -webkit-appearance:none; appearance:none;
+}
 /* color-scheme:dark above is only a HINT that these controls' native UI
    should use a dark palette -- confirmed directly, from a screenshot, that
    Safari/WebKit still rendered this field's actual editable text and
@@ -662,6 +683,12 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity
 .chart .seg.web{ background:linear-gradient(180deg,#9CEFC9,#43BE8B); }
 .chart .seg.direct{ background:var(--foil); }
 .chart .cl{ font-size:.62rem; color:var(--faint); white-space:nowrap; }
+/* Weekly view (90/180-day ranges) shows fewer, wider columns than the
+   daily view's up-to-14 -- but each label is now a "MM-DD–MM-DD" span
+   instead of one short date, which needs more room than the 14px
+   min-width daily columns already use, or it just gets clipped. */
+.chart.weekly .col{ min-width:34px; }
+.chart.weekly .cl{ font-size:.58rem; }
 .legend{ display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:.78rem; color:var(--mut); }
 .legend i{ display:inline-block; width:11px; height:11px; border-radius:3px; margin-inline-end:6px; vertical-align:-1px; }
 
@@ -669,7 +696,7 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity
 .qr-wrap{ display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:start; }
 .qr-box{ padding:16px; border-radius:var(--r-lg); background:#fff; box-shadow:0 18px 44px -18px rgba(0,0,0,.9); }
 .qr-box svg, .qr-box img{ display:block; width:210px; height:210px; }
-.qr-meta code{
+.qr-meta code, .field code{
   display:block; padding:.6em .8em; border-radius:10px; font-family:var(--f-mono); font-size:.78rem;
   background:rgba(255,255,255,.05); box-shadow:inset 0 0 0 1px var(--line-soft); word-break:break-all; color:var(--gold-bright);
 }

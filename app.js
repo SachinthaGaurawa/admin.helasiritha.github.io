@@ -1712,6 +1712,14 @@ function readAgenda() {
    ═══════════════════════════════════════════════════════════════════════════ */
 let galBusy = false, galPick = null;
 let qrUnlocked = false, qrSrc = "qr";
+/* Daily-visits chart range, in days -- was hardcoded to 14 with no way to
+   see further back at all. Persisted at module scope (not just a local
+   variable inside the renderer) so switching range and re-rendering
+   doesn't forget the choice; resets to the default on a fresh page load,
+   same as qrUnlocked/qrSrc above. 180 covers a full 6 months, the longest
+   range asked for. */
+let chartRangeDays = 14;
+const CHART_RANGES = [7, 14, 30, 90, 180];
 
 /* Persist positions. Chunked so a large gallery can never breach Firestore's
    500-writes-per-batch limit. */
@@ -2371,50 +2379,88 @@ const dayKey = (d) => {
 function visitSecs(v) { return (v.ts && v.ts.seconds) ? v.ts.seconds : 0; }
 function visitDay(v) { return v.day || (visitSecs(v) ? dayKey(visitSecs(v) * 1000) : ""); }
 function visitKind(v) { const k = String(v.kind || "").toLowerCase(); return VISIT_KINDS.includes(k) ? k : "direct"; }
+/* The "පැමිණීම් ලිවීම පරීක්ෂා කරන්න" self-test button below writes one real
+   row (ref:"admin-probe") to prove the `visits` Firestore rule is actually
+   deployed -- the ONE thing it can never then do is delete that row again:
+   firestore.rules sets `allow update, delete: if false` on this whole
+   collection, unconditionally, by design (the same append-only guarantee
+   /audit has, so a compromised or careless admin session can never quietly
+   erase visit history). Every count on this page filters these rows out
+   here, once, instead of leaving them to permanently inflate whichever
+   kind a probe used, with no way to remove them again. */
+function isProbeVisit(v) { return v && v.ref === "admin-probe"; }
 function visitStats() {
   const by = { qr: 0, web: 0, direct: 0 };
   const today = dayKey(Date.now()); let todayN = 0;
   const cut7 = Math.floor(Date.now() / 1000) - 7 * 86400; let last7 = 0;
-  visits.forEach(v => { by[visitKind(v)]++; if (visitDay(v) === today) todayN++; if (visitSecs(v) >= cut7) last7++; });
-  return { by, total: visits.length, today: todayN, last7 };
+  let total = 0;
+  visits.forEach(v => {
+    if (isProbeVisit(v)) return;
+    total++;
+    by[visitKind(v)]++;
+    if (visitDay(v) === today) todayN++;
+    if (visitSecs(v) >= cut7) last7++;
+  });
+  return { by, total, today: todayN, last7 };
 }
-/* Permanently delete visit rows. Chunked to respect the 500-write batch limit. */
-async function resetVisits(kind) {
-  const target = kind ? visits.filter(v => visitKind(v) === kind) : visits.slice();
+/* Reset was never actually possible -- see isProbeVisit's own comment:
+   `allow delete: if false` on /visits blocks every client-side delete
+   unconditionally, admin included, so every attempt here used to fail
+   silently behind "මැකීම අසාර්ථකයි — නැවත උත්සාහ කරන්න" ("failed, try
+   again") forever. That was actively misleading — no number of retries was
+   ever going to succeed, by design, not by accident. Kept as a real button
+   (not removed) because zeroing a count is still a reasonable thing to
+   want; it just needs a privileged server-side path (a Vercel function
+   using the Firebase Admin SDK, which — unlike this client SDK — isn't
+   subject to these rules at all, mirroring how /api/sign-upload.js already
+   keeps the Cloudinary secret off the client) to ever actually work. Says
+   so plainly now instead of pretending a retry might help. */
+function resetVisits(kind) {
   const label = kind === "qr" ? "QR" : kind === "web" ? "වෙබ්" : "සියලු";
-  if (!target.length) { toast(label + " වාර්තා නොමැත", "warn"); return; }
-  if (!await confirmTwice(
-    label + " පැමිණීම් වාර්තා " + target.length + "ක් මකනවාද?",
-    "අවසන් තහවුරුව — වාර්තා " + target.length + "ක් ස්ථිරවම මකා දැමේ. ආපසු හැරවිය නොහැක.",
-    "ඔව්, ස්ථිරවම මකන්න")) return;
-  try {
-    for (let i = 0; i < target.length; i += 400) {
-      const batch = writeBatch(db);
-      target.slice(i, i + 400).forEach(v => batch.delete(doc(db, "visits", v.id)));
-      await batch.commit();
-    }
-    logAudit("visits.reset", (kind || "all") + " ×" + target.length);
-    toast(label + " ගණන ශුන්‍ය කෙරිණි ✓ (" + target.length + ")", "ok");
-  } catch (e) { toast("මැකීම අසාර්ථකයි — නැවත උත්සාහ කරන්න", "err"); }
+  toast(label + " ගණන ශුන්‍ය කළ නොහැක — Firestore rules මගින්ම (admin ඇතුළුව) මකා දැමීම අනුමත කර නැත, හිතාමතාම", "warn");
 }
 
 renderers.analytics = function () {
   const S = visitStats();
-  const days = 14, series = [];
+  const days = chartRangeDays, series = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = dayKey(Date.now() - i * 86400000);
     series.push({ d, qr: 0, web: 0, direct: 0, n: 0 });
   }
   const idx = {}; series.forEach((r, i) => idx[r.d] = i);
-  visits.forEach(v => { const i = idx[visitDay(v)]; if (i != null) { series[i][visitKind(v)]++; series[i].n++; } });
+  visits.forEach(v => { if (isProbeVisit(v)) return; const i = idx[visitDay(v)]; if (i != null) { series[i][visitKind(v)]++; series[i].n++; } });
   const peak = Math.max(1, ...series.map(r => r.n));
   const ic = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
   const tile = (v, l, sub, cls, icon) =>
     '<div class="kpi-tile ' + (cls || "") + '"><div class="ic">' + ic(icon) + '</div>' +
     '<div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div>' +
     (sub ? '<div class="s">' + esc(sub) + '</div>' : '') + '</div>';
-  const recent = visits.slice(0, 25);
+  const recent = visits.filter(v => !isProbeVisit(v)).slice(0, 25);
   const kindLabel = { qr: "QR කේතය", web: "වෙබ් සබැඳිය", direct: "සෘජු" };
+  /* Compact when the range gets wide (90/180 days can't fit one legible
+     column per day in the same width 14 columns already used) -- shown as
+     weekly buckets instead of daily ones past 30 days, same stacked-bar
+     visual language, just coarser. Still built from the same daily series
+     above (never re-queries Firestore), so the range switch is instant. */
+  const bucketed = days > 30
+    ? (() => {
+        const weeks = [];
+        for (let i = 0; i < series.length; i += 7) {
+          const chunk = series.slice(i, i + 7);
+          const first = chunk[0].d, last = chunk[chunk.length - 1].d;
+          weeks.push({
+            label: first.slice(5) + (chunk.length > 1 ? "–" + last.slice(5) : ""),
+            qr: chunk.reduce((s, r) => s + r.qr, 0),
+            web: chunk.reduce((s, r) => s + r.web, 0),
+            direct: chunk.reduce((s, r) => s + r.direct, 0),
+            n: chunk.reduce((s, r) => s + r.n, 0)
+          });
+        }
+        return weeks;
+      })()
+    : series.map(r => ({ label: r.d.slice(5), qr: r.qr, web: r.web, direct: r.direct, n: r.n }));
+  const bucketPeak = Math.max(1, ...bucketed.map(r => r.n));
+  const rangeLabel = { 7: "දින 7", 14: "දින 14", 30: "දින 30", 90: "මාස 3", 180: "මාස 6" };
 
   $("#p-analytics").innerHTML =
     '<div class="kpi">' +
@@ -2425,15 +2471,23 @@ renderers.analytics = function () {
       tile(S.today, "අද පැමිණීම්", dayKey(Date.now()), "", ICONS.chart) +
       tile(S.last7, "දින 7ක", "පසුගිය සතිය", "", ICONS.chart) +
     '</div>' +
-    card('<h3>දෛනික පැමිණීම් · පසුගිය දින 14</h3>' +
-      '<div class="chart">' + series.map(r => {
-        const h = (x) => Math.round(x / peak * 100);
-        return '<div class="col" title="' + esc(r.d) + ' · ' + r.n + '">' +
+    card('<h3>වෙබ් / WhatsApp සබැඳිය</h3>' +
+      '<p class="hint">WhatsApp, Instagram, Facebook වැනි app වලින් සබැඳියක් තට්ටු කළ විට, ඒවා සාමාන්‍යයෙන් referrer තොරතුරු browser එකට නොදෙයි — ඒ නිසා සරල සබැඳියක් share කළහොත් එම පැමිණීම් "සෘජු" ලෙස වැරදියට ගණන් ගැනේ. මෙම සබැඳියේ <code>?src=web</code> කොටස ස්ථිරවම ඇතුළත් නිසා, browser/app කුමක් වුවත් "වෙබ් සබැඳියෙන්" ලෙසම හරියටම ගණන් ගැනේ. QR කේත සබැඳියට වඩා මෙය WhatsApp/social මගින් share කිරීමට යොදාගන්න.</p>' +
+      '<div class="field"><label for="webLink">Share කිරීමට සබැඳිය</label>' +
+        '<code id="webLink">' + esc(PUBLIC_SITE.replace(/\/+$/, "") + "/?src=web") + '</code></div>' +
+      '<div class="row"><button class="btn sm ghost" id="webLinkCopy" type="button">සබැඳිය copy</button></div>') +
+    card('<div class="card-head"><h3>දෛනික පැමිණීම් · පසුගිය ' + rangeLabel[days] + '</h3>' +
+      '<div class="row" id="chartRange">' + CHART_RANGES.map(n =>
+        '<button class="btn xs' + (n === days ? " primary" : " ghost") + '" data-range="' + n + '" type="button">' + rangeLabel[n] + '</button>'
+      ).join("") + '</div></div>' +
+      '<div class="chart' + (days > 30 ? " weekly" : "") + '">' + bucketed.map(r => {
+        const h = (x) => Math.round(x / bucketPeak * 100);
+        return '<div class="col" title="' + esc(r.label) + ' · ' + r.n + '">' +
           '<div class="stack">' +
             (r.direct ? '<div class="seg direct" style="height:' + h(r.direct) + '%"></div>' : '') +
             (r.web ? '<div class="seg web" style="height:' + h(r.web) + '%"></div>' : '') +
             (r.qr ? '<div class="seg qr" style="height:' + h(r.qr) + '%"></div>' : '') +
-          '</div><div class="cl">' + esc(r.d.slice(5)) + '</div></div>';
+          '</div><div class="cl">' + esc(r.label) + '</div></div>';
       }).join("") + '</div>' +
       '<div class="legend"><span><i style="background:linear-gradient(180deg,#9CC9F5,#5E93CE)"></i>QR</span>' +
       '<span><i style="background:linear-gradient(180deg,#9CEFC9,#43BE8B)"></i>වෙබ්</span>' +
@@ -2443,7 +2497,7 @@ renderers.analytics = function () {
       '<p class="hint">ගණන් ශුන්‍ය නම් බොහෝවිට `visits` rule එක deploy වී නැත. මෙය ඒක තහවුරු කරයි.</p>' +
       '<div class="row"><button class="btn primary sm" id="vProbe" type="button">පැමිණීම් ලිවීම පරීක්ෂා කරන්න</button></div>' +
       '<pre id="vProbeOut" class="up-test" hidden></pre>') +
-    card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ස්ථිරවම මකා දමයි · දෙවරක් තහවුරු කරයි</p>' +
+    card('<h3>ගණන් ශුන්‍ය කිරීම</h3><p class="hint">තෝරාගත් වර්ගයේ වාර්තා ගණන් වලින් ශුන්‍ය කිරීම — දැනට client එකෙන් කළ නොහැක (පහත බලන්න)</p>' +
       '<div class="row">' +
         '<button class="btn sm bad" id="rsQr"  type="button">QR ගණන ශුන්‍ය (' + S.by.qr + ')</button>' +
         '<button class="btn sm bad" id="rsWeb" type="button">වෙබ් ගණන ශුන්‍ය (' + S.by.web + ')</button>' +
@@ -2458,6 +2512,14 @@ renderers.analytics = function () {
             '<td>' + esc(v.lang || "—") + '</td><td>' + esc((v.ref || "—").slice(0, 46)) + '</td></tr>').join("") +
           '</tbody></table></div>'
         : '<div class="empty">තවම පැමිණීම් වාර්තා නැත. පොදු අඩවියේ නව <code>app.js</code> deploy කළ පසු මෙය පිරෙනු ඇත.</div>'));
+
+  if ($("#webLinkCopy")) $("#webLinkCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText(PUBLIC_SITE.replace(/\/+$/, "") + "/?src=web"); toast("සබැඳිය copy විය ✓", "ok"); }
+    catch (_) { toast("copy කළ නොහැක — අතින් තෝරන්න", "warn"); }
+  };
+  if ($("#chartRange")) $$("#chartRange button").forEach(b => {
+    b.onclick = () => { chartRangeDays = +b.dataset.range; renderers.analytics(); };
+  });
 
   /* Definitive answer to "why is nothing being counted?" — write a real probe
      row exactly as the public site does, then read back the precise outcome. */
@@ -2476,8 +2538,14 @@ renderers.analytics = function () {
       lines.push("✓ ලිවීම සාර්ථකයි — `visits` rule එක deploy වී ඇත.");
       lines.push("  doc id: " + ref.id);
       lines.push("  දැන් පොදු අඩවියේ ගණන් වැඩ කරයි.");
-      try { await deleteDoc(doc(db, "visits", ref.id)); lines.push("  (පරීක්ෂණ වාර්තාව මකා දමන ලදී)"); }
-      catch (_) { lines.push("  ⚠ පරීක්ෂණ වාර්තාව මැකිය නොහැක — ලැයිස්තුවෙන් අතින් මකන්න."); }
+      /* No delete attempt here any more -- `allow delete: if false` on this
+         collection makes it structurally impossible, always, not something
+         a retry or a different account could ever fix (see isProbeVisit's
+         own comment, above visitStats()). This row stays in Firestore
+         permanently, same as every other visit record -- but every count
+         on this page already excludes ref:"admin-probe" rows, so it never
+         shows up in any total, chart, or the recent-visits list either. */
+      lines.push("  (මෙම පරීක්ෂණ වාර්තාව ස්ථිරවම වාර්තා වේ, නමුත් සියලුම ගණන් වලින් ස්වයංක්‍රීයව බැහැර කෙරේ — කිසිවක් අතින් කිරීමට අවශ්‍ය නැත.)");
     } catch (e) {
       const code = (e && e.code) || String(e);
       lines.push("✗ ලිවීම අසාර්ථකයි: " + code);
