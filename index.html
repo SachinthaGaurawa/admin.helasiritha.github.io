@@ -7,6 +7,19 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="color-scheme" content="dark">
+<script>
+/* Build marker — bump this alongside every app.js?v=/style.css?v= bump below,
+   same convention the public repo already uses (see its own index.html).
+   checkForNewBuildAndReload() in app.js periodically re-fetches this exact
+   page and compares this value: it's how an admin who left a tab open
+   through several deploys notices a new one went out and force-reloads,
+   instead of running stale JS/CSS indefinitely no matter how many fixes
+   ship after that tab was first opened -- confirmed directly as the actual
+   explanation for a fix that was genuinely live in production still
+   appearing broken in a real screenshot: this page had no equivalent of
+   the public site's own auto-reload at all until now. */
+window.__BUILD_V__ = "2026092413";
+</script>
 <title>හෙළ සිරිත · පරිපාලන මූලස්ථානය</title>
 <link rel="icon" type="image/png" href="https://res.cloudinary.com/dzrfpc9be/image/upload/v1781121609/admin_favison_i1rrxp.png">
 
@@ -43,7 +56,7 @@
      while after merge. Bump this SAME string on style.css AND app.js
      together, every time either file changes, so a stale copy of one
      can never get paired with a fresh copy of the other. -->
-<link rel="stylesheet" href="style.css?v=2026092412">
+<link rel="stylesheet" href="style.css?v=2026092413">
 </head>
 <body>
 
@@ -166,6 +179,6 @@
   </div>
 </noscript>
 
-<script type="module" src="app.js?v=2026092412"></script>
+<script type="module" src="app.js?v=2026092413"></script>
 </body>
 </html>

@@ -455,8 +455,6 @@ function effGuests() {
       side: g.side === "bride" ? "bride" : "groom",
       count: Math.max(1, num(g.count, 1)),
       status,
-      liquor: r ? !!r.liquor : !!g.liquor,
-      dietary: (r && r.dietary) || g.dietary || "",
       party: r ? Math.max(0, num(r.party, 0)) : 0,
       tableNumber: g.tableNumber == null ? null : num(g.tableNumber, null),
       respondedAt: r && r.ts && r.ts.seconds ? r.ts.seconds : 0,
@@ -689,7 +687,7 @@ async function enterPanel(user) {
     $("#whoEmail").textContent = user.email || "";
     enteredAt = Date.now();
     sessionStart = Date.now(); lastActivity = Date.now();
-    if (!subsStarted) { subsStarted = true; startSubscriptions(); buildNav(); }
+    if (!subsStarted) { subsStarted = true; startSubscriptions(); buildNav(); startBuildWatch(); }
     go(current);
   } finally { entering = false; }
 }
@@ -814,6 +812,38 @@ function paintSiteStatusBadge() {
     : "පොදු අඩවිය තාවකාලිකව අක්‍රියයි — අමුත්තන්ට \"ළඟදීම\" තිරය පමණක් පෙනේ";
 }
 
+/* This admin panel had NO equivalent of the public site's own auto-reload
+   at all until now -- an <script type="module"> tag loads once per
+   navigation and can never hot-reload, and there is no service worker
+   here, so an admin who left a tab open across a deploy kept running
+   whatever JS/CSS that tab loaded with, indefinitely, no matter how many
+   fixes shipped after. Confirmed directly as the real explanation for a
+   fix that WAS genuinely live in production (verified against the deployed
+   file itself) still reading as broken from a fresh screenshot: the tab
+   taking the screenshot had simply never reloaded since. Ported from the
+   public repo's own checkForNewBuildAndReload() -- same mechanism,
+   same reasoning. */
+async function checkForNewBuildAndReload() {
+  try {
+    const res = await fetch("/?_=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const html = await res.text();
+    const m = html.match(/__BUILD_V__\s*=\s*"([^"]+)"/);
+    if (m && m[1] && window.__BUILD_V__ && m[1] !== window.__BUILD_V__) location.reload();
+  } catch (e) { /* offline or transient — try again on the next tick */ }
+}
+let buildWatchStarted = false;
+function startBuildWatch() {
+  if (buildWatchStarted) return;
+  buildWatchStarted = true;
+  setInterval(checkForNewBuildAndReload, 30000);
+  /* Backgrounded/suspended tabs throttle timers -- catch up the instant the
+     admin actually comes back to this tab, rather than waiting out however
+     long the (also throttled) 30s poll takes to next fire. */
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForNewBuildAndReload(); });
+  window.addEventListener("pageshow", checkForNewBuildAndReload);
+}
+
 function startSubscriptions() {
   const warn = (label) => (err) => { console.warn(label, err); syncState(false); };
 
@@ -936,7 +966,7 @@ function saveTheme(t, keepPrev) {
 }
 /* `guestsPublic/{id}` mirrors ONLY {name, family, side} out of `guests/{id}`.
    The public site reads that mirror (never the full `guests` doc) so a
-   visitor can never see another guest's status/liquor/dietary/table —
+   visitor can never see another guest's status/table —
    see firestore.rules. Every guest-mutating path below keeps it in sync;
    "Rebuild directory" in the Security panel repairs it if it ever drifts. */
 function addGuest(o) {
@@ -1190,7 +1220,6 @@ renderers.dashboard = function () {
   const by = (a, s) => a.filter(g => g.status === s).length;
   const people = (a) => a.reduce((n, g) => n + g.count, 0);
   const confirmed = G.filter(g => g.status === "confirmed");
-  const liquor = confirmed.filter(g => g.liquor).length;
   const pendBless = blessings.filter(b => !b.approved).length;
   const seated = G.filter(g => g.status === "confirmed" && g.tableNumber).length;
   const pct = G.length ? Math.round(confirmed.length / G.length * 100) : 0;
@@ -1214,7 +1243,6 @@ renderers.dashboard = function () {
       stat(headcount(), "තහවුරු පුද්ගලයන්", "ok") +
       stat(by(G, "pending"), "පොරොත්තුවෙන්", "warn") +
       stat(by(G, "declined"), "නොපැමිණෙන", "bad") +
-      stat(liquor, "මත්පැන් අවශ්‍ය") +
       stat(pendBless, "අනුමැතියට සුබ පැතුම්", pendBless ? "warn" : "") +
     '</div>' +
     card('<h3>පිළිතුරු ප්‍රගතිය</h3><p class="hint">මුළු ආරාධිතයන්ගෙන් ' + pct + '% තහවුරු වී ඇත</p>' +
@@ -1227,9 +1255,9 @@ renderers.dashboard = function () {
     card('<h3>පාර්ශව අනුව</h3><p class="hint">මනාලිය සහ මනාලයාගේ ආරාධිත බෙදීම</p>' +
       '<div class="split">' + sideCol("කෞෂානි · මනාලිය", bride) + sideCol("ගෞරව · මනාලයා", groom) + '</div>') +
     card('<h3>නවතම පිළිතුරු</h3>' + (recent.length
-      ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th><th>මත්පැන්</th></tr></thead><tbody>' +
+      ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th></tr></thead><tbody>' +
         recent.map(g => '<tr><td>' + esc(g.name) + '</td><td>' + esc(sideName(g.side)) + '</td><td>' + statusPill(g.status) +
-          '</td><td class="num">' + (g.party || "—") + '</td><td>' + (g.liquor ? "ඔව්" : "නැහැ") + '</td></tr>').join("") +
+          '</td><td class="num">' + (g.party || "—") + '</td></tr>').join("") +
         '</tbody></table></div>'
       : '<div class="empty">තවම පිළිතුරු ලැබී නැත.</div>')) +
     card('<h3>අන්තර්ගත සාරාංශය</h3>' +
@@ -1408,11 +1436,10 @@ renderers.guests = function () {
   $("#p-guests").innerHTML =
     card('<h3>ආගන්තුකයෙකු එක් කරන්න</h3>' +
       '<div class="grid2">' + fld("නම", "g_name", "") + fld("පවුලේ නාමය (විකල්ප)", "g_family", "") + '</div>' +
-      '<div class="grid3">' +
+      '<div class="grid2">' +
         '<div class="field"><label for="g_side">පාර්ශවය</label><select class="inp" id="g_side">' +
           '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
         fld("සාමාජික සංඛ්‍යාව", "g_count", "1", "number") +
-        '<div class="field"><label for="g_diet">ආහාර අවශ්‍යතා (විකල්ප)</label><input class="inp" id="g_diet"></div>' +
       '</div>' +
       '<div class="row"><button class="btn primary" id="gAdd" type="button">එක් කරන්න</button></div>') +
 
@@ -1436,7 +1463,7 @@ renderers.guests = function () {
         chip("ගෞරව (" + groom + ")", "groom", gFilter.side) +
       '</div>' +
       (slice.length
-        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th><th>මත්පැන්</th><th>ආහාර</th><th>මේසය</th><th></th></tr></thead><tbody>' +
+        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th><th>මේසය</th><th></th></tr></thead><tbody>' +
           slice.map(g =>
             '<tr>' +
             '<td><input class="mini k-name" data-id="' + g.id + '" value="' + esc(g.name) + '" style="min-width:118px"></td>' +
@@ -1444,8 +1471,6 @@ renderers.guests = function () {
             '<td><select class="mini k-side" data-id="' + g.id + '"><option value="bride"' + (g.side === "bride" ? " selected" : "") + '>කෞෂානි</option><option value="groom"' + (g.side === "groom" ? " selected" : "") + '>ගෞරව</option></select></td>' +
             '<td><input class="mini k-count num" data-id="' + g.id + '" type="number" min="1" max="40" value="' + g.count + '" style="width:62px"></td>' +
             '<td><select class="mini k-status" data-id="' + g.id + '"><option value="pending"' + (g.status === "pending" ? " selected" : "") + '>පොරොත්තු</option><option value="confirmed"' + (g.status === "confirmed" ? " selected" : "") + '>තහවුරු</option><option value="declined"' + (g.status === "declined" ? " selected" : "") + '>නොපැමිණේ</option></select></td>' +
-            '<td style="text-align:center"><input type="checkbox" class="k-liq" data-id="' + g.id + '"' + (g.liquor ? " checked" : "") + '></td>' +
-            '<td><input class="mini k-diet" data-id="' + g.id + '" value="' + esc(g.dietary) + '" style="min-width:96px"></td>' +
             '<td><input class="mini k-table num" data-id="' + g.id + '" type="number" min="1" max="99" value="' + (g.tableNumber || "") + '" style="width:56px" placeholder="—"></td>' +
             '<td><button class="btn xs bad k-del" data-id="' + g.id + '" type="button">මකන්න</button></td>' +
             '</tr>').join("") +
@@ -1470,9 +1495,9 @@ renderers.guests = function () {
       await addGuest({
         name, family: $("#g_family").value.trim(), side: $("#g_side").value,
         count: clampInt($("#g_count").value, 1, 40), status: "pending",
-        liquor: false, dietary: $("#g_diet").value.trim(), tableNumber: null
+        tableNumber: null
       });
-      $("#g_name").value = ""; $("#g_family").value = ""; $("#g_count").value = "1"; $("#g_diet").value = "";
+      $("#g_name").value = ""; $("#g_family").value = ""; $("#g_count").value = "1";
       toast("ආගන්තුකයා එක් විය ✓", "ok");
     } catch (e) { toast("එක් කිරීම අසාර්ථකයි", "err"); }
   };
@@ -1488,23 +1513,14 @@ renderers.guests = function () {
   bind(".k-fam",  async el => { try { await updGuest(el.dataset.id, { family: el.value.trim() }); toast("පවුල යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-side", async el => { try { await updGuest(el.dataset.id, { side: el.value }); toast("පාර්ශවය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-count", async el => { try { await updGuest(el.dataset.id, { count: clampInt(el.value, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
-  bind(".k-diet", async el => { try { await updGuest(el.dataset.id, { dietary: el.value.trim() }); toast("යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-table", async el => { const v = el.value ? clampInt(el.value, 1, 99) : null; try { await updGuest(el.dataset.id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-status", async el => {
     const g = effGuests().find(x => x.id === el.dataset.id); if (!g) return;
     const st = el.value;
     try {
       await updGuest(g.id, { status: st });
-      if (g.hasRsvp || st !== "pending") await setRsvp(g, { attending: st === "confirmed", party: st === "confirmed" ? Math.max(1, g.party || g.count) : 0, count: st === "confirmed" ? Math.max(1, g.party || g.count) : 0, liquor: !!g.liquor, dietary: g.dietary || "" });
+      if (g.hasRsvp || st !== "pending") await setRsvp(g, { attending: st === "confirmed", party: st === "confirmed" ? Math.max(1, g.party || g.count) : 0, count: st === "confirmed" ? Math.max(1, g.party || g.count) : 0 });
       toast("තත්ත්වය යාවත්කාලීනයි ✓", "ok");
-    } catch (e) { toast("දෝෂයකි", "err"); }
-  });
-  bind(".k-liq", async el => {
-    const g = effGuests().find(x => x.id === el.dataset.id); if (!g) return;
-    try {
-      await updGuest(g.id, { liquor: el.checked });
-      if (g.hasRsvp) await setRsvp(g, { liquor: el.checked });
-      toast("යාවත්කාලීනයි", "ok");
     } catch (e) { toast("දෝෂයකි", "err"); }
   });
   $$(".k-del", $("#p-guests")).forEach(b => b.onclick = async () => {
@@ -1566,7 +1582,7 @@ renderers.guests = function () {
           const ref = doc(collection(db, "guests"));
           batch.set(ref, {
             name: r.name, family: r.family || "", side, count: r.count,
-            status: "pending", liquor: false, dietary: "", tableNumber: null, ts: serverTimestamp()
+            status: "pending", tableNumber: null, ts: serverTimestamp()
           });
           batch.set(doc(db, "guestsPublic", ref.id), { name: r.name, family: r.family || "", side });
           n++;
@@ -1601,10 +1617,10 @@ renderers.guests = function () {
   };
   $("#csvOut").onclick = () => {
     const G = effGuests();
-    const rows = [["නම", "පවුල", "පාර්ශවය", "ගණන", "තත්ත්වය", "මත්පැන්", "ආහාර", "මේසය"]].concat(
+    const rows = [["නම", "පවුල", "පාර්ශවය", "ගණන", "තත්ත්වය", "මේසය"]].concat(
       G.map(g => [g.name, g.family, sideName(g.side), g.count,
         g.status === "confirmed" ? "තහවුරු" : g.status === "declined" ? "නොපැමිණේ" : "පොරොත්තු",
-        g.liquor ? "ඔව්" : "නැහැ", g.dietary, g.tableNumber || ""]));
+        g.tableNumber || ""]));
     downloadCsv(rows, "helasiritha-guests.csv");
   };
 };
@@ -1638,12 +1654,9 @@ renderers.rsvp = function () {
     all: G.length,
     confirmed: G.filter(g => g.status === "confirmed").length,
     pending: G.filter(g => g.status === "pending").length,
-    declined: G.filter(g => g.status === "declined").length,
-    liquor: G.filter(g => g.status === "confirmed" && g.liquor).length
+    declined: G.filter(g => g.status === "declined").length
   };
-  let list = G.filter(g =>
-    rFilter.k === "all" ? true :
-    rFilter.k === "liquor" ? (g.status === "confirmed" && g.liquor) : g.status === rFilter.k);
+  let list = G.filter(g => rFilter.k === "all" ? true : g.status === rFilter.k);
   if (rFilter.q) { const q = rFilter.q.toLowerCase(); list = list.filter(g => (g.name + " " + g.family).toLowerCase().includes(q)); }
   const pages = Math.max(1, Math.ceil(list.length / PAGE));
   rFilter.page = Math.min(rFilter.page, pages);
@@ -1654,23 +1667,19 @@ renderers.rsvp = function () {
     '<div class="stats">' +
       stat(counts.confirmed, "තහවුරු", "ok") + stat(headcount(), "තහවුරු පුද්ගලයන්", "ok") +
       stat(counts.pending, "පොරොත්තු", "warn") + stat(counts.declined, "නොපැමිණේ", "bad") +
-      stat(counts.liquor, "මත්පැන් අවශ්‍ය") +
     '</div>' +
     card('<div class="card-head"><h3>පිළිතුරු නාමාවලිය</h3>' +
       '<input class="inp" id="rSearch" placeholder="සොයන්න…" style="max-width:230px" value="' + esc(rFilter.q) + '"></div>' +
       '<div class="filters">' + ch("සියල්ල (" + counts.all + ")", "all") + ch("තහවුරු (" + counts.confirmed + ")", "confirmed") +
         ch("පොරොත්තු (" + counts.pending + ")", "pending") + ch("නොපැමිණේ (" + counts.declined + ")", "declined") +
-        ch("මත්පැන් (" + counts.liquor + ")", "liquor") +
         '<button class="btn sm ghost" id="rCsv" type="button" style="margin-inline-start:auto">CSV බාගන්න</button></div>' +
       (slice.length
-        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th><th>මත්පැන්</th><th>ආහාර</th><th>ක්‍රියා</th></tr></thead><tbody>' +
+        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th><th>ක්‍රියා</th></tr></thead><tbody>' +
           slice.map(g =>
             '<tr><td>' + esc(g.name) + '</td><td>' + esc(g.family) + '</td>' +
             '<td><span class="pill side">' + esc(sideName(g.side)) + '</span></td>' +
             '<td>' + statusPill(g.status) + '</td>' +
             '<td class="num">' + (g.party || g.count) + '</td>' +
-            '<td>' + (g.liquor ? '<span class="pill pend">ඔව්</span>' : "නැහැ") + '</td>' +
-            '<td>' + (esc(g.dietary) || "—") + '</td>' +
             '<td><button class="btn xs ok r-yes" data-id="' + g.id + '" type="button">තහවුරු</button> ' +
             '<button class="btn xs bad r-no" data-id="' + g.id + '" type="button">නොපැමිණේ</button>' +
             (g.hasRsvp ? ' <button class="btn xs ghost r-clr" data-id="' + g.id + '" type="button">හිස් කරන්න</button>' : '') +
@@ -1690,14 +1699,14 @@ renderers.rsvp = function () {
     const g = effGuests().find(x => x.id === b.dataset.id); if (!g) return;
     try { await fn(g); toast("යාවත්කාලීන විය ✓", "ok"); } catch (e) { toast("දෝෂයකි", "err"); }
   });
-  act(".r-yes", async g => { const p = Math.max(1, g.party || g.count); await setRsvp(g, { attending: true, party: p, count: p, liquor: !!g.liquor, dietary: g.dietary || "" }); await updGuest(g.id, { status: "confirmed" }); });
-  act(".r-no",  async g => { await setRsvp(g, { attending: false, party: 0, count: 0, liquor: false, dietary: g.dietary || "" }); await updGuest(g.id, { status: "declined" }); });
+  act(".r-yes", async g => { const p = Math.max(1, g.party || g.count); await setRsvp(g, { attending: true, party: p, count: p }); await updGuest(g.id, { status: "confirmed" }); });
+  act(".r-no",  async g => { await setRsvp(g, { attending: false, party: 0, count: 0 }); await updGuest(g.id, { status: "declined" }); });
   act(".r-clr", async g => { await delRsvp(g.id); await updGuest(g.id, { status: "pending" }); });
   $("#rCsv").onclick = () => {
-    const rows = [["නම", "පවුල", "පාර්ශවය", "තත්ත්වය", "සංඛ්‍යාව", "මත්පැන්", "ආහාර"]].concat(
+    const rows = [["නම", "පවුල", "පාර්ශවය", "තත්ත්වය", "සංඛ්‍යාව"]].concat(
       effGuests().map(g => [g.name, g.family, sideName(g.side),
         g.status === "confirmed" ? "තහවුරු" : g.status === "declined" ? "නොපැමිණේ" : "පොරොත්තු",
-        g.party || g.count, g.liquor ? "ඔව්" : "නැහැ", g.dietary]));
+        g.party || g.count]));
     downloadCsv(rows, "helasiritha-rsvp.csv");
   };
 };
@@ -2916,7 +2925,7 @@ renderers.security = function () {
       ' · ඡායාරූප ' + gallery.length + ' · පැතුම් ' + blessings.length + '</span></div>') +
 
     card('<h3>පොදු ආගන්තුක නාමාවලිය</h3>' +
-      '<p class="hint">පොදු අඩවියේ RSVP සෙවීමට පෙනෙන්නේ නම/පවුල/පාර්ශවය පමණයි — liquor/status/table වැනි රහස්‍ය දත්ත කිසි විටෙක පොදු නොවේ (firestore.rules). ' +
+      '<p class="hint">පොදු අඩවියේ RSVP සෙවීමට පෙනෙන්නේ නම/පවුල/පාර්ශවය පමණයි — status/table වැනි රහස්‍ය දත්ත කිසි විටෙක පොදු නොවේ (firestore.rules). ' +
       'මෙම බොත්තම <code>guestsPublic</code> කැඩපත <code>guests</code> සමඟ නැවත සමමුහූර්ත කරයි — firestore.rules අලුතින් publish කළ පසු, හෝ දත්ත ගැලපෙනවාදැයි සැක සිතේ නම් එබන්න.</p>' +
       '<div class="row"><button class="btn sm primary" id="secRebuildPub" type="button">නාමාවලිය යළි ගොඩනගන්න</button></div>' +
       '<pre id="pubDirOut" class="up-test"' + (pubDirReport ? '>' + esc(pubDirReport) : ' hidden>') + '</pre>') +
