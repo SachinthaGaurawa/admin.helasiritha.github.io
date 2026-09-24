@@ -1367,7 +1367,15 @@ function wireNameTrio(ids) {
   let debounceT = null;
   Object.keys(els).forEach(lang => {
     els[lang].addEventListener("input", () => {
-      els[lang].dataset.userEdited = "1";
+      /* Emptying a field by hand (select-all + backspace, etc.) releases its
+         "hand-edited" claim instead of freezing it forever -- otherwise a
+         wrong auto-filled guess that the admin backspaces away to retry
+         stays permanently un-fillable, since every future auto-fill pass
+         would keep skipping it as "already edited by the admin". A field
+         only "belongs" to the admin's hand-editing while it still holds
+         text they typed. */
+      if (els[lang].value.trim()) els[lang].dataset.userEdited = "1";
+      else delete els[lang].dataset.userEdited;
       clearTimeout(debounceT);
       debounceT = setTimeout(async () => {
         const text = els[lang].value.trim();
