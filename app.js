@@ -941,6 +941,7 @@ function refresh(panel) {
   if (a && a.closest && a.closest("#main") && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.type !== "checkbox") return;
   renderers[panel]();
   syncDtDisplays();
+  syncTxtDisplays();
 }
 
 /* ════════════════════════ FIRESTORE WRITES ═════════════════════════════════ */
@@ -1146,6 +1147,7 @@ function go(panel) {
   $("#pageSub").textContent  = TITLES[panel][1];
   if (renderers[panel]) renderers[panel]();
   syncDtDisplays();
+  syncTxtDisplays();
   const m = $("#main"); if (m) m.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1169,7 +1171,13 @@ function fld(label, id, val, type, placeholder) {
     return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' +
       '<div class="dt-wrap"><input class="inp dt-native" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '>' +
       '<div class="dt-display" id="' + id + '_disp" aria-hidden="true"></div></div></div>';
-  return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input class="inp" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '></div>';
+  /* Same wrap-and-swap as the datetime branch above, for the same
+     empirically-confirmed reason (see syncTxtDisplays()'s own comment):
+     color-scheme:dark alone did not fix real Safari painting this box
+     solid white at rest. */
+  return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' +
+    '<div class="txt-wrap"><input class="inp txt-native" id="' + id + '" type="' + type + '" value="' + esc(val) + '"' + ph + '>' +
+    '<div class="txt-display" id="' + id + '_disp" aria-hidden="true"></div></div></div>';
 }
 /* Formats a date/time/datetime-local <input>'s raw value (its own local,
    unambiguous "YYYY-MM-DD"/"HH:MM"/"YYYY-MM-DDTHH:MM" format) the same way
@@ -1209,6 +1217,33 @@ function syncDtDisplays() {
     if (!inp.dataset.dtWired) {
       inp.dataset.dtWired = "1";
       inp.addEventListener("input", () => paintDtDisplay(disp, inp));
+    }
+  });
+}
+/* Same wrap/native/display swap as the datetime fields, now for plain
+   text/number .inp fields (see fld()'s "text-like" branch) -- proven
+   necessary, not precautionary: color-scheme:dark was shipped first, as
+   the standard fix for a native control ignoring author CSS, and a
+   follow-up screenshot on real Safari showed the exact same field still
+   painted solid white with washed-out text at rest, unchanged. A plain
+   text input has none of datetime's inaccessible UA-shadow internals, so
+   ordinary background/color SHOULD always win -- empirically it still
+   doesn't on this device, for reasons neither color-scheme nor direct
+   background/color rules reach. Overlay swap is what's actually confirmed
+   to work here, twice now, not a new guess. */
+function paintTxtDisplay(disp, inp) {
+  const text = inp.value || inp.placeholder || "";
+  disp.textContent = text;
+  disp.classList.toggle("txt-display-empty", !inp.value);
+}
+function syncTxtDisplays() {
+  $$(".txt-native").forEach(inp => {
+    const disp = document.getElementById(inp.id + "_disp");
+    if (!disp) return;
+    paintTxtDisplay(disp, inp);
+    if (!inp.dataset.txtWired) {
+      inp.dataset.txtWired = "1";
+      inp.addEventListener("input", () => paintTxtDisplay(disp, inp));
     }
   });
 }
@@ -1397,7 +1432,15 @@ function wireNameTrio(ids) {
         const variants = await nameVariants(text, lang);
         Object.keys(variants).forEach(k => {
           const el = els[k];
-          if (el && el !== els[lang] && !el.dataset.userEdited) el.value = variants[k];
+          if (!el || el === els[lang] || el.dataset.userEdited) return;
+          el.value = variants[k];
+          /* Setting .value directly never fires "input" -- without this the
+             sibling's .txt-display overlay (see syncTxtDisplays()) would
+             keep showing stale/placeholder text even though the field was
+             just auto-filled, defeating the whole point of the auto-fill
+             (the admin is meant to SEE and review it before saving). */
+          const disp = document.getElementById(el.id + "_disp");
+          if (disp) paintTxtDisplay(disp, el);
         });
       }, 500);
     });
@@ -1408,7 +1451,16 @@ function wireNameTrio(ids) {
    (otherwise a stale dataset.userEdited from the previous guest could
    silently stop auto-fill from working on the next one). */
 function resetNameTrio(ids) {
-  [ids.en, ids.si, ids.ta].forEach(id => { const el = $("#" + id); if (el) { el.value = ""; delete el.dataset.userEdited; } });
+  [ids.en, ids.si, ids.ta].forEach(id => {
+    const el = $("#" + id); if (!el) return;
+    el.value = ""; delete el.dataset.userEdited;
+    /* Setting .value directly, unlike typing, never fires an "input" event
+       -- without this, the field's .txt-display overlay (see
+       syncTxtDisplays()) would keep showing the just-cleared old text until
+       the next full panel re-render happened to come along. */
+    const disp = document.getElementById(id + "_disp");
+    if (disp) paintTxtDisplay(disp, el);
+  });
 }
 const card = (inner, cls) => '<div class="card' + (cls ? " " + cls : "") + '">' + inner + '</div>';
 const stat = (v, l, cls) => '<div class="stat' + (cls ? " " + cls : "") + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></div>';
@@ -1738,6 +1790,7 @@ renderers.guests = function () {
       resetNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
       resetNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
       $("#g_count").value = "1";
+      syncTxtDisplays(); // g_count's .value above bypassed "input", so its overlay needs a manual repaint
       toast("ආගන්තුකයා එක් විය ✓", "ok");
     } catch (e) { toast("එක් කිරීම අසාර්ථකයි", "err"); }
   };

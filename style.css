@@ -333,6 +333,32 @@ input.dt-native:not(:focus){ opacity:0; }
    every other input's own ::placeholder already uses (line ~278). */
 .dt-display.dt-display-empty{ color:var(--faint); }
 .dt-wrap:focus-within .dt-display{ display:none; }
+/* Plain text/number fields get the exact same wrap/native/display swap as
+   the datetime fields above -- proven necessary, not just precautionary:
+   color-scheme:dark (added to the shared .inp rule) was shipped first as
+   the standard/expected fix for this, and a follow-up screenshot on real
+   Safari showed it made no difference at all, the field still painting
+   solid white at rest. Unlike datetime, a plain input has no UA-shadow
+   internals, so simple author CSS SHOULD always win here -- but empirically
+   doesn't, on this device/OS/Safari combination, for reasons neither
+   color-scheme nor plain background/color rules reach. Sidestepping the
+   fight entirely (the one technique in this codebase actually confirmed to
+   work on real Safari) is the reliable fix, not another CSS property guess. */
+.txt-wrap{
+  position:relative; border-radius:var(--r-sm);
+  background:rgba(255,255,255,.038); border:1px solid var(--line-soft);
+  transition:.24s var(--ease);
+}
+.txt-wrap:hover{ border-color:var(--line); }
+input.txt-native{ position:relative; z-index:1; background:transparent; border-color:transparent; }
+input.txt-native:not(:focus){ opacity:0; }
+.txt-display{
+  position:absolute; inset:0; z-index:0; display:flex; align-items:center;
+  padding:.74em .9em; pointer-events:none; color:var(--ink); font-size:.92rem;
+  overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+}
+.txt-display.txt-display-empty{ color:var(--faint); }
+.txt-wrap:focus-within .txt-display{ display:none; }
 /* Reported again, from a fresh screenshot taken well after the
    ::-webkit-datetime-edit rules below had already deployed to production:
    real Safari (confirmed only reachable/testable there -- this sandbox's
