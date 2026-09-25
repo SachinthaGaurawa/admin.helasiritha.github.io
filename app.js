@@ -2414,11 +2414,39 @@ function drawAgenda() {
         '<textarea class="inp k-den" data-i="' + i + '" rows="2" placeholder="Description (English)">' + esc(it.descEn || "") + '</textarea>' +
         '<textarea class="inp k-dta" data-i="' + i + '" rows="2" placeholder="விவரம் (தமிழ்)">' + esc(it.descTa || "") + '</textarea>' +
       '</div>' +
+      '<div class="ai-tri-row" style="margin:0">' +
+        '<button class="btn xs ghost ai-tri-btn ag-ai-btn" type="button" data-i="' + i + '">✨ AI පරිවර්තනය</button>' +
+        '<span class="ai-tri-status ag-ai-status" data-i="' + i + '"></span></div>' +
     '</div>').join("") : '<div class="empty">තවම අංග නැත.</div>';
   $$(".k-rm", $("#agList")).forEach(b => b.onclick = () => { readAgenda(); agenda.splice(+b.dataset.i, 1); drawAgenda(); });
   const move = (i, j) => { if (j < 0 || j >= agenda.length) return; readAgenda(); const t = agenda[i]; agenda[i] = agenda[j]; agenda[j] = t; drawAgenda(); };
   $$(".k-up", $("#agList")).forEach(b => b.onclick = () => move(+b.dataset.i, +b.dataset.i - 1));
   $$(".k-dn", $("#agList")).forEach(b => b.onclick = () => move(+b.dataset.i, +b.dataset.i + 1));
+  wireAgendaAi();
+}
+/* Each agenda item's title/description are short sentence-ish phrases, not
+   names/places -- always the "ai" (real Gemini translation) engine, same
+   button+status row as the details panel's sentence trios. Rows are
+   re-rendered wholesale on every add/remove/reorder, so wiring re-runs
+   fresh each time rather than tracking a dataset flag across renders. */
+function wireAgendaAi() {
+  $$(".ag-ai-btn", $("#agList")).forEach(btn => {
+    const i = btn.dataset.i;
+    const status = document.querySelector('.ag-ai-status[data-i="' + i + '"]');
+    const titleEls = { si: $('.k-tsi[data-i="' + i + '"]'), en: $('.k-ten[data-i="' + i + '"]'), ta: $('.k-tta[data-i="' + i + '"]') };
+    const descEls = { si: $('.k-dsi[data-i="' + i + '"]'), en: $('.k-den[data-i="' + i + '"]'), ta: $('.k-dta[data-i="' + i + '"]') };
+    [...Object.values(titleEls), ...Object.values(descEls)].forEach(el => {
+      if (!el) return;
+      el.addEventListener("input", () => { el.dataset.lastEdited = String(Date.now()); });
+    });
+    btn.onclick = async () => {
+      btn.disabled = true;
+      const okTitle = await runAiTrio(titleEls, "A short agenda-item title for a wedding ceremony program/timeline", status, null);
+      const okDesc = await runAiTrio(descEls, "A short one-line description of a wedding ceremony agenda item", status, null);
+      if (!okTitle && !okDesc) status.textContent = "⚠ පළමුව මාතෘකාව හෝ විස්තරය type කරන්න";
+      btn.disabled = false;
+    };
+  });
 }
 function readAgenda() {
   const map = { "k-ic": "icon", "k-time": "timeLabel", "k-tsi": "titleSi", "k-ten": "titleEn", "k-tta": "titleTa", "k-dsi": "descSi", "k-den": "descEn", "k-dta": "descTa" };
