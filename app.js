@@ -2856,8 +2856,9 @@ renderers.seating = function () {
       stat(pool.length, "පැවරීමට ඉතිරි", pool.length ? "warn" : "ok") +
       stat(tables.length, "මේස ගණන") + stat(people(C), "මුළු පුද්ගලයන්") + '</div>' +
     card('<div class="card-head"><h3>මේසයක් එක් කරන්න</h3>' +
-      '<div class="row"><input class="inp" id="tNum" type="number" min="1" max="99" placeholder="මේස අංකය" style="max-width:130px">' +
-      '<button class="btn primary sm" id="tAdd" type="button">මේසය එක් කරන්න</button></div></div>' +
+      '<div class="row" style="align-items:center;gap:12px">' +
+        '<span class="hint" style="margin:0">මේස අංකය</span>' + stepper("t-new", "new", 1, 1, 99) +
+        '<button class="btn primary sm" id="tAdd" type="button">මේසය එක් කරන්න</button></div></div>' +
       '<p class="hint">ආගන්තුකයන් මේසයකට ඇද දමන්න (drag & drop) · ✕ මගින් ඉවත් කරන්න</p>') +
     '<div class="split" style="align-items:start">' +
       '<div class="card"><h3>පවරා නැති ආගන්තුකයෝ (' + pool.length + ')</h3>' +
@@ -2879,11 +2880,12 @@ renderers.seating = function () {
         : '<div class="empty">තවම මේස එක් කර නැත.</div>') + '</div>' +
     '</div>';
 
+  wireSteppers(".t-new", () => {});
   $("#tAdd").onclick = () => {
-    const n = clampInt($("#tNum").value, 1, 99);
-    if (!$("#tNum").value || n < 1) { toast("වලංගු මේස අංකයක් දෙන්න", "warn"); return; }
+    const valEl = document.querySelector(".t-new .mini-step-val");
+    const n = clampInt(valEl ? valEl.textContent : "1", 1, 99);
     if (tables.includes(n)) { toast("මේස " + n + " දැනටමත් ඇත", "warn"); return; }
-    extraTables.push(n); $("#tNum").value = ""; renderers.seating();
+    extraTables.push(n); renderers.seating();
     toast("මේස " + n + " එක් කෙරිණි — ආගන්තුකයන් ඇද දමන්න", "ok");
   };
   const assign = async (gid, tn) => {
