@@ -267,9 +267,24 @@ function buildAuditPrompt(langValues, fieldContext) {
     "literal, or mechanically translated (a calque of another version's sentence structure, or " +
     "generic/robotic phrasing that lacks the dignity and warmth this invitation calls for)? " +
     "Flag this even when the meaning is technically correct -- an unnatural, machine-sounding " +
-    "version is treated as seriously as a factual mistake here.\n" +
+    "version is treated as seriously as a factual mistake here. BUT only when it is CLEARLY and " +
+    "OBVIOUSLY stiff/mechanical -- the kind of phrasing a native speaker would notice immediately " +
+    "on a first read, not something you had to look closely to decide might be slightly less " +
+    "warm than an alternative. Two different fluent native speakers would commonly write this " +
+    "field in slightly different ways without either being wrong; only flag a version that falls " +
+    "outside that normal range of acceptable natural phrasing, not one that is merely not your " +
+    "own first-choice wording.\n" +
     "Do NOT flag natural differences in sentence structure or word order between languages -- " +
     "those are expected and correct, not mistakes.\n\n" +
+    "CALIBRATION -- read this before deciding: this audit is run repeatedly over time on largely " +
+    "unchanged text, and a finding that appears on one run and vanishes on the next (with nothing " +
+    "in the text actually different) actively damages the admin's trust in this feature. When a " +
+    "potential issue is genuinely borderline or a matter of taste -- especially for checks 5 " +
+    "(internal correctness) and 7 (VOICE), the two most subjective of the seven -- resolve that " +
+    "doubt in favor of consistent=true (no finding), not against it. Only report a problem you " +
+    "are confident a second careful proofreader, reviewing this exact same text independently, " +
+    "would also flag. A missed borderline case costs nothing (the admin can always re-review by " +
+    "eye); a finding that flip-flops between runs costs the admin's trust in every future run.\n\n" +
     "Before rating your confidence in this audit's finding (or clean bill of health), check " +
     "EACH of these three specific uncertainty factors and answer true/false honestly for each " +
     "-- do not skip this step:\n" +
@@ -337,7 +352,7 @@ function parseAuditJson(raw, presentLangs) {
   };
 }
 
-async function callGeminiOnce(model, promptText, apiKey) {
+async function callGeminiOnce(model, promptText, apiKey, temperature) {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model +
     ":generateContent?key=" + encodeURIComponent(apiKey);
   const r = await fetch(url, {
@@ -345,7 +360,7 @@ async function callGeminiOnce(model, promptText, apiKey) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+      generationConfig: { temperature: typeof temperature === "number" ? temperature : 0.2, responseMimeType: "application/json" }
     })
   });
   if (!r.ok) {
@@ -380,12 +395,12 @@ const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const RETRY_DELAYS_MS = [600];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGeminiWithFallback(promptText, apiKey) {
+async function callGeminiWithFallback(promptText, apiKey, temperature) {
   let lastErr;
   for (const model of GEMINI_MODEL_CANDIDATES) {
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
       try {
-        const raw = await callGeminiOnce(model, promptText, apiKey);
+        const raw = await callGeminiOnce(model, promptText, apiKey, temperature);
         return { raw, model };
       } catch (e) {
         lastErr = e;
@@ -506,7 +521,22 @@ module.exports = async function handler(req, res) {
       return;
     }
     try {
-      const { raw, model } = await callGeminiWithFallback(buildAuditPrompt(langValues, fieldContext), GEMINI_KEY);
+      /* temperature 0 (not the 0.2 default translate mode keeps -- see its
+         own call site below) -- reported directly: an admin who fixed
+         EXACTLY what one audit run flagged, saved, and re-ran the audit
+         immediately got told something was STILL wrong, often on a field
+         that had just been declared clean two runs ago. That is temperature-
+         driven sampling variance on a judgement call, not the content
+         actually changing between runs -- translation GENERATION benefits
+         from a little creative latitude (many natural phrasings are
+         equally valid), but an AUDIT's whole job is a consistent yes/no
+         judgement on the SAME input, and 0.2 was letting Gemini's own
+         sampling flip that judgement between runs on unchanged text. 0 is
+         as close to deterministic as this API offers -- it does not
+         guarantee byte-identical output every time (no LLM API honestly
+         can), but it removes the random sampling that was the direct,
+         demonstrated cause of the flip-flopping here. */
+      const { raw, model } = await callGeminiWithFallback(buildAuditPrompt(langValues, fieldContext), GEMINI_KEY, 0);
       const parsed = parseAuditJson(raw, filled);
       res.status(200).json({
         ok: true, consistent: parsed.consistent, severity: parsed.severity, confidence: parsed.confidence,
