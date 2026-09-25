@@ -94,6 +94,52 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
   );
 }
 
+/* AUDIT MODE ─────────────────────────────────────────────────────────────
+   Everything above generates a translation once, at the moment an admin
+   clicks a button. It never re-checks a field again after that -- if the
+   admin hand-edits just the English version of a paragraph six weeks later
+   (a completely normal thing to do), the Sinhala/Tamil versions silently
+   drift out of sync with no mechanism that would ever notice or say so.
+   This mode is that missing check: given the THREE already-saved values
+   for one field, ask whether they still actually say the same thing, and
+   report the specific mismatch if they don't -- a proofreading pass over
+   existing content, not a translation of new content. */
+function buildAuditPrompt(langValues, fieldContext) {
+  const lines = Object.keys(langValues)
+    .filter((l) => langValues[l])
+    .map((l) => LANG_NAMES[l] + ": " + langValues[l])
+    .join("\n");
+  return (
+    "You are proofreading the three language versions of ONE field of a formal wedding " +
+    "invitation, checking whether they are still faithful equivalents of each other.\n" +
+    "Context for this field: " + (fieldContext || "a wedding invitation field") + "\n\n" +
+    lines + "\n\n" +
+    "Check specifically for: (1) a difference in MEANING or factual content between the " +
+    "versions (a name, date, number, place, or relationship -- e.g. \"father\" vs \"parents\" -- " +
+    "that doesn't match across all versions present); (2) a version that is missing content the " +
+    "others have; (3) a proper noun (a person or place name) that is not phonetically the same " +
+    "across versions. Do NOT flag natural differences in sentence structure, word order, or " +
+    "formality register between languages -- those are expected and correct, not mistakes.\n\n" +
+    "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
+    '{"consistent":true|false,"severity":"none|low|medium|high","issue":"...","suggestion":"..."}\n' +
+    "consistent=true and severity=\"none\" with empty issue/suggestion if the versions genuinely " +
+    "match; otherwise describe the SPECIFIC mismatch in \"issue\" (one sentence) and propose a " +
+    "concrete fix in \"suggestion\" (one sentence)."
+  );
+}
+
+function parseAuditJson(raw) {
+  const cleaned = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  const j = JSON.parse(cleaned);
+  const severity = ["none", "low", "medium", "high"].includes(j.severity) ? j.severity : (j.consistent ? "none" : "medium");
+  return {
+    consistent: j.consistent === true,
+    severity,
+    issue: typeof j.issue === "string" ? j.issue : "",
+    suggestion: typeof j.suggestion === "string" ? j.suggestion : "",
+  };
+}
+
 async function callGeminiOnce(model, promptText, apiKey) {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model +
     ":generateContent?key=" + encodeURIComponent(apiKey);
@@ -173,10 +219,33 @@ module.exports = async function handler(req, res) {
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch (_) { body = {}; } }
   body = body || {};
+  const fieldContext = String(body.fieldContext || "").slice(0, 300);
+
+  if (body.mode === "audit") {
+    const langValues = {
+      si: String(body.si || "").trim().slice(0, 2000),
+      en: String(body.en || "").trim().slice(0, 2000),
+      ta: String(body.ta || "").trim().slice(0, 2000),
+    };
+    const filled = Object.keys(langValues).filter((l) => langValues[l]);
+    if (filled.length < 2) {
+      res.status(200).json({ ok: true, consistent: true, severity: "none", issue: "", suggestion: "" });
+      return;
+    }
+    try {
+      const { raw, model } = await callGeminiWithFallback(buildAuditPrompt(langValues, fieldContext), GEMINI_KEY);
+      const parsed = parseAuditJson(raw);
+      res.status(200).json({ ok: true, consistent: parsed.consistent, severity: parsed.severity, issue: parsed.issue, suggestion: parsed.suggestion, model });
+    } catch (e) {
+      console.error("ai-translate audit failed:", e && e.stack ? e.stack : e);
+      res.status(502).json({ error: "Translation service unreachable or failed: " + (e && e.message ? e.message : String(e)) });
+    }
+    return;
+  }
+
   const text = String(body.text || "").trim().slice(0, 2000);
   const fromLang = String(body.fromLang || "");
   const toLang = String(body.toLang || "");
-  const fieldContext = String(body.fieldContext || "").slice(0, 300);
   if (!text) { res.status(200).json({ ok: true, translation: "", confidence: "high", note: "" }); return; }
   if (!LANG_NAMES[fromLang] || !LANG_NAMES[toLang] || fromLang === toLang) {
     res.status(400).json({ error: "fromLang/toLang must be distinct values from si/en/ta" });
