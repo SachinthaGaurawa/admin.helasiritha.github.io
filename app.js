@@ -2623,13 +2623,25 @@ renderers.rsvp = function () {
   sb.oninput = () => { rFilter.q = sb.value.trim(); rFilter.page = 1; const p = sb.selectionStart; renderers.rsvp(); const n = $("#rSearch"); n.focus(); n.setSelectionRange(p, p); };
   if ($("#rPrev")) $("#rPrev").onclick = () => { rFilter.page--; renderers.rsvp(); };
   if ($("#rNext")) $("#rNext").onclick = () => { rFilter.page++; renderers.rsvp(); };
-  const act = (sel, fn) => $$(sel, $("#p-rsvp")).forEach(b => b.onclick = async () => {
+  /* Every one of these buttons overwrites a guest's confirmed RSVP status by
+     hand — a single misclick in a long, densely-packed table silently flips
+     someone's headcount. Requested directly: gate each one behind the same
+     PIN re-entry the app already uses for its other consequential actions
+     (QR regenerate, address unlock), specifically so an accidental click by
+     the admin themself can't go through unnoticed -- typing the PIN is the
+     deliberate pause that catches it before anything is written. */
+  const act = (sel, fn, pinMsg) => $$(sel, $("#p-rsvp")).forEach(b => b.onclick = async () => {
     const g = effGuests().find(x => x.id === b.dataset.id); if (!g) return;
+    const ok = await requirePin(pinMsg(g));
+    if (!ok) return;
     try { await fn(g); toast("යාවත්කාලීන විය ✓", "ok"); } catch (e) { toast("දෝෂයකි", "err"); }
   });
-  act(".r-yes", async g => { const p = Math.max(1, g.party || g.count); await setRsvp(g, { attending: true, party: p, count: p }); await updGuest(g.id, { status: "confirmed" }); });
-  act(".r-no",  async g => { await setRsvp(g, { attending: false, party: 0, count: 0 }); await updGuest(g.id, { status: "declined" }); });
-  act(".r-clr", async g => { await delRsvp(g.id); await updGuest(g.id, { status: "pending" }); });
+  act(".r-yes", async g => { const p = Math.max(1, g.party || g.count); await setRsvp(g, { attending: true, party: p, count: p }); await updGuest(g.id, { status: "confirmed" }); },
+    g => g.name + " ගේ පිළිතුර 'තහවුරු' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+  act(".r-no",  async g => { await setRsvp(g, { attending: false, party: 0, count: 0 }); await updGuest(g.id, { status: "declined" }); },
+    g => g.name + " ගේ පිළිතුර 'නොපැමිණේ' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+  act(".r-clr", async g => { await delRsvp(g.id); await updGuest(g.id, { status: "pending" }); },
+    g => g.name + " ගේ පිළිතුර හිස් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
   $("#rCsv").onclick = () => {
     const rows = [["නම", "පවුල", "පාර්ශවය", "තත්ත්වය", "සංඛ්‍යාව"]].concat(
       effGuests().map(g => [g.name, g.family, sideName(g.side),
