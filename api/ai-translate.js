@@ -136,6 +136,39 @@ const BRAND_VOICE = (
   "meaning, warmth, and ceremonial gravitas of the original."
 );
 
+/* CONFIDENCE CALIBRATION ────────────────────────────────────────────────
+   Explicit, repeated request: the confidence signal itself must become a
+   genuinely reliable predictor of "does this need a human to check it",
+   not just a vibe the model attaches after the fact. Two changes make
+   that real, together:
+
+   1. The model no longer picks "high/medium/low" as a single holistic
+      judgement call -- it must first answer four SPECIFIC true/false
+      questions about the translation (see buildPrompt/buildAuditPrompt),
+      then derive confidence FROM those answers by an explicit rule this
+      prompt states outright. Forcing the reasoning to go through named,
+      checkable criteria before a label is a standard, real technique for
+      improving an LLM's self-assessment calibration -- a free-form "how
+      confident are you?" is measurably less reliable than "did you flag
+      ambiguity? idiom? register risk? a name you're unsure of?".
+   2. This server never simply trusts whatever confidence label the model
+      typed, even after that. deriveConfidence() below recomputes an
+      independent confidence FROM the same risk-factor answers and takes
+      the MORE CONSERVATIVE (lower) of the two -- so a model that flags
+      two real risk factors but still types "high" (a genuine miscalibration,
+      not hypothetical -- self-generated content is well known to bias an
+      LLM's own judgement of it favorably) gets overridden down to what
+      its own stated risk factors actually support. The reported label can
+      never be rounded UP by this, only held to what it already claimed to
+      have checked for. */
+const CONF_RANK = { low: 0, medium: 1, high: 2 };
+function deriveConfidence(reportedConfidence, riskFactors) {
+  const trueCount = Object.values(riskFactors || {}).filter(Boolean).length;
+  const computed = trueCount === 0 ? "high" : trueCount === 1 ? "medium" : "low";
+  const reported = CONF_RANK.hasOwnProperty(reportedConfidence) ? reportedConfidence : "medium";
+  return CONF_RANK[computed] <= CONF_RANK[reported] ? computed : reported;
+}
+
 /* One request asks Gemini to translate AND self-critique in the same call
    -- cheaper than two round-trips, and keeps the critique grounded in the
    exact translation it just produced rather than re-judging it cold. */
@@ -149,14 +182,22 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
     "Produce a translation that reads naturally, warmly, and formally in " + LANG_NAMES[toLang] +
     " for a wedding invitation, preserving the ceremonial/honorific register of the original " +
     "(do not translate literally word-for-word if that would sound unnatural or robotic).\n\n" +
-    "Then rate your OWN confidence in this translation as exactly one of: high, medium, low. " +
-    "Use \"low\" if the source text is ambiguous, unusually idiomatic, you are genuinely unsure " +
-    "of a natural formal phrasing, or you suspect your own translation still leans too literal/" +
-    "mechanical rather than sounding like something a culturally-fluent native speaker would " +
-    "naturally write for this occasion. Add a short note (one sentence, or empty string if " +
-    "confidence is high) explaining what specifically you are unsure about.\n\n" +
+    "Before rating confidence, check EACH of these four specific risk factors for THIS " +
+    "translation and answer true/false honestly for each -- do not skip this step:\n" +
+    "- ambiguousSource: could the source text's meaning genuinely be read more than one way?\n" +
+    "- idiomatic: does the source rely on an idiom, wordplay, or culturally-specific phrase " +
+    "with no exact equivalent in " + LANG_NAMES[toLang] + "?\n" +
+    "- registerRisk: is there real doubt about whether your translation's formality/honorific " +
+    "level exactly matches what a formal wedding invitation calls for?\n" +
+    "- properNounRisk: does the text contain a person or place name whose correct spelling/" +
+    "transliteration in the target script you are not fully certain of?\n" +
+    "Then set confidence to \"high\" ONLY if all four are false, \"medium\" if exactly one is " +
+    "true, and \"low\" if two or more are true -- never report \"high\" while also flagging any " +
+    "risk factor as true. Add a short note (one sentence, empty string only if confidence is " +
+    "high) naming which risk factor(s) you flagged and why.\n\n" +
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
-    '{"translation":"...","confidence":"high|medium|low","note":"..."}'
+    '{"translation":"...","confidence":"high|medium|low","note":"...","riskFactors":' +
+    '{"ambiguousSource":true|false,"idiomatic":true|false,"registerRisk":true|false,"properNounRisk":true|false}}'
   );
 }
 
@@ -183,7 +224,16 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
    corrected text per language (not just describe the problem in prose),
    so the admin can apply a fix in one click instead of retyping it by
    hand -- see the "corrections" field below, and the #auditReport "මෙය AI
-   මගින් නිවැරදි කරන්න" button in app.js that applies it. */
+   මගින් නිවැරදි කරන්න" button in app.js that applies it.
+
+   Confidence here goes through the same deriveConfidence() calibration as
+   translate mode (see its own comment, above buildPrompt) -- the model
+   self-reports three specific uncertainty factors instead of a holistic
+   label, and the handler below adds a FOURTH, objectively computed one
+   (partialCoverage: fewer than all three languages were even present to
+   cross-check against) that the model is never asked to self-report,
+   since it's a plain fact the server already knows for certain and has no
+   reason to trust an LLM's word for. */
 function buildAuditPrompt(langValues, fieldContext) {
   const lines = Object.keys(langValues)
     .filter((l) => langValues[l])
@@ -220,9 +270,23 @@ function buildAuditPrompt(langValues, fieldContext) {
     "version is treated as seriously as a factual mistake here.\n" +
     "Do NOT flag natural differences in sentence structure or word order between languages -- " +
     "those are expected and correct, not mistakes.\n\n" +
+    "Before rating your confidence in this audit's finding (or clean bill of health), check " +
+    "EACH of these three specific uncertainty factors and answer true/false honestly for each " +
+    "-- do not skip this step:\n" +
+    "- ambiguousFinding: even if you flagged (or didn't flag) something, could a reasonable " +
+    "person disagree about whether it's actually a mistake versus an intentional/acceptable " +
+    "stylistic choice?\n" +
+    "- vagueContext: is the \"Context for this field\" given above too generic or vague for you " +
+    "to be fully sure what tone, format, or content this specific field actually requires?\n" +
+    "- properNounUncertainty: does this field contain a person or place name whose correct " +
+    "spelling/transliteration across these scripts you are not fully certain of?\n" +
+    "Then set confidence to \"high\" ONLY if all three are false, \"medium\" if exactly one is " +
+    "true, and \"low\" if two or more are true -- never report \"high\" while also flagging any " +
+    "uncertainty factor as true.\n\n" +
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
     '{"consistent":true|false,"severity":"none|low|medium|high","confidence":"high|medium|low",' +
-    '"issue":"...","suggestion":"...","corrections":{' +
+    '"issue":"...","suggestion":"...","riskFactors":{"ambiguousFinding":true|false,' +
+    '"vagueContext":true|false,"properNounUncertainty":true|false},"corrections":{' +
     presentLangs.map((l) => '"' + l + '":"..."').join(",") +
     "}}\n" +
     "consistent=true, severity=\"none\", confidence=\"high\" with empty issue/suggestion and every " +
@@ -238,8 +302,7 @@ function buildAuditPrompt(langValues, fieldContext) {
     "traditional, dignified phrasing per the VOICE guidance above, preserving its exact meaning " +
     "-- do not change a different language just because one sounds robotic. Leave any language " +
     "that is already correct AND already natural as an empty string \"\" in corrections (do not " +
-    "rewrite text that isn't wrong). Set confidence=\"low\" only if you are genuinely unsure " +
-    "whether something is actually a mistake (e.g. a stylistic choice that might be intentional)."
+    "rewrite text that isn't wrong)."
   );
 }
 
@@ -247,7 +310,16 @@ function parseAuditJson(raw, presentLangs) {
   const cleaned = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const j = JSON.parse(cleaned);
   const severity = ["none", "low", "medium", "high"].includes(j.severity) ? j.severity : (j.consistent ? "none" : "medium");
-  const confidence = ["high", "medium", "low"].includes(j.confidence) ? j.confidence : "medium";
+  const rawRisk = (j.riskFactors && typeof j.riskFactors === "object") ? j.riskFactors : {};
+  const riskFactors = {
+    ambiguousFinding: rawRisk.ambiguousFinding === true,
+    vagueContext: rawRisk.vagueContext === true,
+    properNounUncertainty: rawRisk.properNounUncertainty === true,
+    /* Objectively known to the server, never the model's to self-report --
+       see this function's own comment, above buildAuditPrompt. */
+    partialCoverage: (presentLangs || []).length < 3,
+  };
+  const confidence = deriveConfidence(j.confidence, riskFactors);
   const rawCorrections = (j.corrections && typeof j.corrections === "object") ? j.corrections : {};
   const corrections = {};
   for (const l of presentLangs || []) {
@@ -258,6 +330,7 @@ function parseAuditJson(raw, presentLangs) {
     consistent: j.consistent === true,
     severity,
     confidence,
+    riskFactors,
     issue: typeof j.issue === "string" ? j.issue : "",
     suggestion: typeof j.suggestion === "string" ? j.suggestion : "",
     corrections,
@@ -354,8 +427,15 @@ function parseGeminiJson(raw) {
   const cleaned = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const j = JSON.parse(cleaned);
   if (typeof j.translation !== "string") throw new Error("missing translation field");
-  const confidence = ["high", "medium", "low"].includes(j.confidence) ? j.confidence : "medium";
-  return { translation: j.translation, confidence, note: typeof j.note === "string" ? j.note : "" };
+  const rawRisk = (j.riskFactors && typeof j.riskFactors === "object") ? j.riskFactors : {};
+  const riskFactors = {
+    ambiguousSource: rawRisk.ambiguousSource === true,
+    idiomatic: rawRisk.idiomatic === true,
+    registerRisk: rawRisk.registerRisk === true,
+    properNounRisk: rawRisk.properNounRisk === true,
+  };
+  const confidence = deriveConfidence(j.confidence, riskFactors);
+  return { translation: j.translation, confidence, riskFactors, note: typeof j.note === "string" ? j.note : "" };
 }
 
 module.exports = async function handler(req, res) {
@@ -422,7 +502,7 @@ module.exports = async function handler(req, res) {
     };
     const filled = Object.keys(langValues).filter((l) => langValues[l]);
     if (filled.length < 2) {
-      res.status(200).json({ ok: true, consistent: true, severity: "none", confidence: "high", issue: "", suggestion: "", corrections: {} });
+      res.status(200).json({ ok: true, consistent: true, severity: "none", confidence: "high", riskFactors: {}, issue: "", suggestion: "", corrections: {} });
       return;
     }
     try {
@@ -430,7 +510,8 @@ module.exports = async function handler(req, res) {
       const parsed = parseAuditJson(raw, filled);
       res.status(200).json({
         ok: true, consistent: parsed.consistent, severity: parsed.severity, confidence: parsed.confidence,
-        issue: parsed.issue, suggestion: parsed.suggestion, corrections: parsed.corrections, model,
+        riskFactors: parsed.riskFactors, issue: parsed.issue, suggestion: parsed.suggestion,
+        corrections: parsed.corrections, model,
       });
     } catch (e) {
       console.error("ai-translate audit failed:", e && e.stack ? e.stack : e);
@@ -452,7 +533,10 @@ module.exports = async function handler(req, res) {
   try {
     const { raw, model } = await callGeminiWithFallback(buildPrompt(text, fromLang, toLang, fieldContext), GEMINI_KEY);
     const parsed = parseGeminiJson(raw);
-    res.status(200).json({ ok: true, translation: parsed.translation, confidence: parsed.confidence, note: parsed.note, model });
+    res.status(200).json({
+      ok: true, translation: parsed.translation, confidence: parsed.confidence,
+      riskFactors: parsed.riskFactors, note: parsed.note, model,
+    });
   } catch (e) {
     /* Logged server-side (visible in Vercel's runtime logs), not just
        returned in the response -- the FIRST reported failure of this
