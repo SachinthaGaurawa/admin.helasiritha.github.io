@@ -129,6 +129,24 @@ service cloud.firestore {
         && d.ua   is string && d.ua.size()   <= 200;
     }
 
+    // ── /rsvpFailures/{id} ───────────────────────────────────────────────
+    // Best-effort diagnostic written by the public site the moment an
+    // RSVP submission ultimately fails (after its own retries), so a
+    // repeated guest-reported failure leaves real evidence behind instead
+    // of another guess. Write-only for the public, same shape as /visits/.
+    match /rsvpFailures/{id} {
+      allow read: if isAdmin();
+      allow create: if isValidRsvpFailure();
+      allow update, delete: if false;
+    }
+    function isValidRsvpFailure() {
+      let d = request.resource.data;
+      return d.guestId is string && d.guestId.size() <= 200
+        && d.code    is string && d.code.size()    <= 60
+        && d.message is string && d.message.size() <= 300
+        && d.ua      is string && d.ua.size()      <= 200;
+    }
+
     // ── /audit/{id} ──────────────────────────────────────────────────────
     // Tamper-evident admin activity log. Append-only — not even the root
     // admin can edit or delete a past entry once written.

@@ -429,7 +429,7 @@ const DAY_TA = ["ஞாயிற்றுக்கிழமை","திங்க
 let content   = Object.assign({}, CONTENT_DEFAULT);
 let agenda    = AGENDA_DEFAULT.slice();
 let theme     = Object.assign({}, THEME_DEFAULT);
-let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [];
+let gallery = [], guests = [], rsvps = [], blessings = [], visits = [], audit = [], rsvpFailures = [];
 let visitsCapped = false, signMode = "unknown";
 let qrPersisted = null;   // { baseUrl, src, url, generatedAt, generatedBy } — adminSettings/qr, synced live
 let pinState    = null;   // { pinHash, pinSalt, updatedAt, updatedBy } — adminSettings/security, synced live
@@ -924,6 +924,16 @@ function startSubscriptions() {
     visits = a; visitsCapped = a.length >= 5000;
     refresh("analytics"); refresh("dashboard");
   }, warn("visits"));
+
+  /* Diagnostic evidence the public site writes the moment a guest's RSVP
+     submission ultimately fails (see rsvpFailures' own comment in the
+     public site's submitRsvp()) -- real evidence for the RSVP panel below
+     instead of relying on a guest's own retelling of what happened. */
+  onSnapshot(query(collection(db, "rsvpFailures"), orderBy("ts", "desc"), limit(200)), (qs) => {
+    const a = []; qs.forEach(d => a.push(Object.assign({ id: d.id }, d.data())));
+    rsvpFailures = a;
+    refresh("rsvp"); refresh("dashboard");
+  }, warn("rsvpFailures"));
 
   /* Append-only administrative audit trail. */
   onSnapshot(query(collection(db, "audit"), orderBy("ts", "desc"), limit(200)), (qs) => {
@@ -2588,7 +2598,25 @@ renderers.rsvp = function () {
           '<div class="pager"><button class="btn xs ghost" id="rPrev" type="button"' + (rFilter.page <= 1 ? " disabled" : "") + '>← පෙර</button>' +
           '<span>පිටුව ' + rFilter.page + ' / ' + pages + ' · මුළු ' + list.length + '</span>' +
           '<button class="btn xs ghost" id="rNext" type="button"' + (rFilter.page >= pages ? " disabled" : "") + '>ඊළඟ →</button></div>'
-        : '<div class="empty">මෙම පෙරහනට ගැළපෙන පිළිතුරු නැත.</div>'));
+        : '<div class="empty">මෙම පෙරහනට ගැළපෙන පිළිතුරු නැත.</div>')) +
+    /* Real evidence, not another guess: every RSVP submission that
+       ultimately failed on the public site (after its own retries) writes
+       one of these. A guest reporting "connection error" again now has an
+       actual entry here to check -- which guest, what error code, which
+       browser -- instead of relying on their retelling alone. Hidden
+       entirely once empty so this never clutters the common case. */
+    (rsvpFailures.length
+      ? card('<div class="card-head"><h3>RSVP දෝෂ වාර්තා</h3><span class="pill warn">' + rsvpFailures.length + '</span></div>' +
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>වේලාව</th><th>අමුත්තා</th><th>දෝෂ කේතය</th><th>පණිවිඩය</th></tr></thead><tbody>' +
+        rsvpFailures.slice(0, 50).map(f => {
+          const g = guests.find(x => x.id === f.guestId);
+          const who = g ? (g.name + (g.family ? " · " + g.family : "")) : (f.guestId || "");
+          const when = f.ts && f.ts.seconds ? new Date(f.ts.seconds * 1000).toLocaleString("si-LK") : "";
+          return '<tr><td>' + esc(when) + '</td><td>' + esc(who) + '</td>' +
+            '<td><span class="pill bad">' + esc(f.code || "") + '</span></td>' +
+            '<td class="hint">' + esc(f.message || "") + '</td></tr>';
+        }).join("") + '</tbody></table></div>')
+      : "");
 
   $$("[data-r]", $("#p-rsvp")).forEach(c => c.onclick = () => { rFilter.k = c.dataset.r; rFilter.page = 1; renderers.rsvp(); });
   const sb = $("#rSearch");
