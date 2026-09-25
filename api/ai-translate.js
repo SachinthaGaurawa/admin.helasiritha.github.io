@@ -46,7 +46,20 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 const ADMIN_EMAIL = "gaurawasachintha@gmail.com";
-const GEMINI_MODEL = "gemini-2.0-flash";
+/* Google periodically retires model IDs outright (not a quota/deprecation
+   WARNING -- a hard 404, "is no longer available") and names the current
+   replacement directly in that error. gemini-2.0-flash was one such
+   casualty; Google's own error response named gemini-3.8-flash as its
+   replacement. gemini-3.8-pro is tried FIRST for the higher translation
+   accuracy a pro-tier model gives (the admin's Google account has Pro
+   access), falling back to the flash tier automatically -- ONLY on a 404
+   (model retired/renamed), never on an unrelated failure (bad key, quota,
+   a safety-filter block), since those would fail identically on every
+   candidate and retrying would just multiply wasted Gemini calls. This is
+   what should have existed the first time a model name went stale: one
+   silent, automatic recovery step instead of a hard outage until the next
+   manual deploy. */
+const GEMINI_MODEL_CANDIDATES = ["gemini-3.8-pro", "gemini-3.8-flash"];
 const LANG_NAMES = { si: "Sinhala", en: "English", ta: "Tamil" };
 
 async function verifyIdToken(idToken, apiKey) {
@@ -79,6 +92,45 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
     '{"translation":"...","confidence":"high|medium|low","note":"..."}'
   );
+}
+
+async function callGeminiOnce(model, promptText, apiKey) {
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model +
+    ":generateContent?key=" + encodeURIComponent(apiKey);
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+    })
+  });
+  if (!r.ok) {
+    const errBody = await r.text();
+    const err = new Error("Gemini HTTP " + r.status + ": " + errBody.slice(0, 300));
+    err.status = r.status;
+    throw err;
+  }
+  const j = await r.json();
+  const raw = j && j.candidates && j.candidates[0] && j.candidates[0].content &&
+    j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
+  if (!raw) throw new Error("Gemini returned no content (possibly blocked by safety filters)");
+  return raw;
+}
+
+async function callGeminiWithFallback(promptText, apiKey) {
+  let lastErr;
+  for (const model of GEMINI_MODEL_CANDIDATES) {
+    try {
+      const raw = await callGeminiOnce(model, promptText, apiKey);
+      return { raw, model };
+    } catch (e) {
+      lastErr = e;
+      if (e.status !== 404) throw e;
+      console.error("ai-translate: " + model + " unavailable (404), trying next candidate");
+    }
+  }
+  throw lastErr;
 }
 
 function parseGeminiJson(raw) {
@@ -132,26 +184,9 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL +
-      ":generateContent?key=" + encodeURIComponent(GEMINI_KEY);
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(text, fromLang, toLang, fieldContext) }] }],
-        generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
-      })
-    });
-    if (!r.ok) {
-      const errBody = await r.text();
-      throw new Error("Gemini HTTP " + r.status + ": " + errBody.slice(0, 300));
-    }
-    const j = await r.json();
-    const raw = j && j.candidates && j.candidates[0] && j.candidates[0].content &&
-      j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text;
-    if (!raw) throw new Error("Gemini returned no content (possibly blocked by safety filters)");
+    const { raw, model } = await callGeminiWithFallback(buildPrompt(text, fromLang, toLang, fieldContext), GEMINI_KEY);
     const parsed = parseGeminiJson(raw);
-    res.status(200).json({ ok: true, translation: parsed.translation, confidence: parsed.confidence, note: parsed.note });
+    res.status(200).json({ ok: true, translation: parsed.translation, confidence: parsed.confidence, note: parsed.note, model });
   } catch (e) {
     /* Logged server-side (visible in Vercel's runtime logs), not just
        returned in the response -- the FIRST reported failure of this

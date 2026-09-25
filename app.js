@@ -1533,7 +1533,7 @@ async function aiTranslate(text, fromLang, toLang, fieldContext) {
     let j = null; try { j = await r.json(); } catch (_) {}
     if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
     if (!j || !j.ok) return { error: "unexpected response shape" };
-    return { translation: j.translation, confidence: j.confidence, note: j.note };
+    return { translation: j.translation, confidence: j.confidence, note: j.note, model: j.model };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
 }
 /* Unlike wireNameTrio() (automatic, debounced, fires on every keystroke --
@@ -3768,6 +3768,7 @@ renderers.security = function () {
       lines.push("  test text (en) : Thank you for celebrating with us.");
       lines.push("  translation(si): " + result.translation);
       lines.push("  confidence     : " + result.confidence);
+      lines.push("  model          : " + (result.model || "?"));
       lines.push("  ⇒ AI පරිවර්තන feature එක සම්පූර්ණයෙන්ම වැඩ කරනවා.");
     } else {
       lines.push("✗ Gemini ට request එක අසාර්ථක විය.");
