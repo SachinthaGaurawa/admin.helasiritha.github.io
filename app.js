@@ -1536,6 +1536,27 @@ async function aiTranslate(text, fromLang, toLang, fieldContext) {
     return { translation: j.translation, confidence: j.confidence, note: j.note, model: j.model };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
 }
+/* Cross-checks the THREE already-saved language versions of one field
+   against each other (not a translation of new text -- a proofreading pass
+   over what's already there). Catches the failure mode ordinary
+   translate-once tooling never can: an admin hand-editing just ONE
+   language later (a completely normal thing to do) silently drifting the
+   other two out of sync, with nothing that would ever notice or say so. */
+async function aiAuditTrio(si, en, ta, fieldContext) {
+  try {
+    const u = auth.currentUser; if (!u) return { error: "signed out" };
+    const token = await u.getIdToken();
+    const r = await fetch(AI_TRANSLATE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify({ mode: "audit", si, en, ta, fieldContext })
+    });
+    let j = null; try { j = await r.json(); } catch (_) {}
+    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
+    if (!j || !j.ok) return { error: "unexpected response shape" };
+    return { consistent: j.consistent, severity: j.severity, issue: j.issue, suggestion: j.suggestion, model: j.model };
+  } catch (e) { return { error: (e && e.message) || "network error" }; }
+}
 /* Unlike wireNameTrio() (automatic, debounced, fires on every keystroke --
    fine for a fast free phonetic lookup), this is a single explicit button
    per trio: an LLM call is slower and (unlike the transliteration proxy)
@@ -1778,6 +1799,11 @@ renderers.details = function () {
       '<button class="btn primary" id="translateAllBtn" type="button">✨ මේ පිටුවේ තියෙන සියල්ල AI පරිවර්තනය කරන්න</button>' +
       '<span class="ai-tri-status" id="translateAllStatus" style="font-size:.85rem">යටින් තියෙන trio එකකින් අඩුම ගානේ එක් භාෂාවක් type කරලා තියෙනවා නම්, අනිත් දෙකම මෙතනින් එකවර පුරවා ගන්න පුළුවන්</span>' +
     '</div>' +
+    '<div class="card ai-tri-row" style="gap:14px">' +
+      '<button class="btn sm ghost" id="auditAllBtn" type="button">🔍 AI පරිවර්තන ගුණාත්මක පරීක්ෂණය</button>' +
+      '<span class="ai-tri-status" id="auditAllStatus" style="font-size:.85rem">දැනටමත් සුරැකි සිංහල/English/தமிழ் පෙළ තුනම එකිනෙකට ගැලපෙනවාදැයි AI මගින් හරස්-පරීක්ෂා කරයි (අතින් සංස්කරණයකින් පසු වෙනස් වූවා විය හැකි තැන් හඳුනාගැනීමට)</span>' +
+    '</div>' +
+    '<div class="card" id="auditReportWrap" hidden><h3>පරීක්ෂණ වාර්තාව</h3><div id="auditReport"></div></div>' +
     card('<h3>මනාල යුවළ</h3><p class="hint">මනාලිය මුලින් · තුන් භාෂාවෙන්ම (පොදු පිටුව + සන්නස දෙකටම යෙදේ)</p>' +
       tri("brideName", "මනාලියගේ නම", c.brideName, c.brideNameEn, c.brideNameTa, null, "name") +
       tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa, null, "name") +
@@ -1913,6 +1939,60 @@ renderers.details = function () {
     }
     status.innerHTML = '<span style="color:var(--ok)">✓ ' + done + ' trio පරිවර්තනය කළා' +
       (skipped ? ' · ' + skipped + ' හිස්ව තිබූ නිසා මඟහැරිණි' : '') + ' — හැම field එකක්ම පරීක්ෂා කර සුරකින්න</span>';
+    btn.disabled = false;
+  };
+
+  /* Audit: cross-checks the CURRENTLY-SAVED si/en/ta trio for every field
+     on this page, plus every agenda item's title/description (the only
+     other place trilingual free-text content lives) -- this is a
+     proofreading pass over content that's already there, not a
+     translation step, so it reads directly from the loaded content/agenda
+     rather than requiring a fresh save first. Sequential for the same
+     rate-limit reason as translateAllBtn above. */
+  $("#auditAllBtn").onclick = async () => {
+    const btn = $("#auditAllBtn"), status = $("#auditAllStatus");
+    const reportWrap = $("#auditReportWrap"), report = $("#auditReport");
+    btn.disabled = true;
+    reportWrap.hidden = true;
+    const targets = DETAILS_TRIOS.map(([base, , ctx]) => ({
+      label: base, ctx,
+      si: v(base + "Si_"), en: v(base + "En_"), ta: v(base + "Ta_"),
+    })).concat(agenda.flatMap((it, i) => ([
+      { label: "වැඩසටහන #" + (i + 1) + " · මාතෘකාව", ctx: "An agenda-item title for a wedding ceremony program/timeline",
+        si: it.titleSi || "", en: it.titleEn || "", ta: it.titleTa || "" },
+      { label: "වැඩසටහන #" + (i + 1) + " · විස්තරය", ctx: "A short description of a wedding ceremony agenda item",
+        si: it.descSi || "", en: it.descEn || "", ta: it.descTa || "" },
+    ])));
+
+    const findings = [];
+    let checked = 0, skipped = 0;
+    for (const t of targets) {
+      const filled = [t.si, t.en, t.ta].filter((s) => s.trim()).length;
+      if (filled < 2) { skipped++; continue; }
+      status.textContent = "🔍 (" + (checked + skipped + 1) + "/" + targets.length + ") " + t.label + " පරීක්ෂා වෙමින්...";
+      const r = await aiAuditTrio(t.si, t.en, t.ta, t.ctx);
+      checked++;
+      if (r.error) { findings.push({ label: t.label, severity: "error", issue: r.error, suggestion: "" }); continue; }
+      if (!r.consistent && r.severity !== "none") findings.push({ label: t.label, severity: r.severity, issue: r.issue, suggestion: r.suggestion });
+    }
+
+    const sevColor = { high: "var(--bad)", medium: "var(--warn)", low: "var(--mut)", error: "var(--bad)" };
+    const sevLabel = { high: "බරපතල අසමගියක්", medium: "මධ්‍යම මට්ටමේ අසමගියක්", low: "සුළු අසමගියක්", error: "පරීක්ෂා කළ නොහැකි විය" };
+    if (findings.length) {
+      report.innerHTML = findings.map((f) =>
+        '<div class="item" style="flex-direction:column;align-items:stretch;gap:4px;padding-inline-start:12px;border-inline-start:3px solid ' + (sevColor[f.severity] || "var(--mut)") + '">' +
+          '<b style="color:' + (sevColor[f.severity] || "var(--mut)") + '">' + esc(f.label) + ' — ' + (sevLabel[f.severity] || f.severity) + '</b>' +
+          '<div>' + esc(f.issue) + '</div>' +
+          (f.suggestion ? '<div class="faint">යෝජනාව: ' + esc(f.suggestion) + '</div>' : '') +
+        '</div>'
+      ).join("");
+      reportWrap.hidden = false;
+    } else {
+      reportWrap.hidden = true;
+    }
+    status.innerHTML = '<span style="color:' + (findings.length ? "var(--warn)" : "var(--ok)") + '">' +
+      (findings.length ? "⚠ ගැටළු " + findings.length + "ක් හමු විය — පහත වාර්තාව බලන්න" : "✓ ගැටළු හමු නොවීය — සියල්ල එකිනෙකට ගැලපේ") +
+      ' · fields ' + checked + 'ක් පරීක්ෂා කළා' + (skipped ? ' · ' + skipped + 'ක් මඟහැරිණි (භාෂා 2කටවත් අඩුවෙන් පෙළ තිබූ නිසා)' : '') + '</span>';
     btn.disabled = false;
   };
 
