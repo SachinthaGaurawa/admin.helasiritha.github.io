@@ -223,6 +223,30 @@ module.exports = async function handler(req, res) {
   const GEMINI_KEY = process.env.Gemini_API_Helasiritha;
 
   if (req.method === "GET") {
+    /* ?probe=models -- lists the model IDs Gemini_API_Helasiritha can
+       actually see RIGHT NOW, straight from Google's own ListModels API,
+       instead of this file continuing to guess model names from an error
+       message and hope. The key's VALUE is never in the response, only
+       model names (public information, same as Google's own docs list) --
+       safe to leave unauthenticated like the rest of this GET handler,
+       and this is exactly the diagnostic needed after GEMINI_MODEL_CANDIDATES
+       guessed wrong (or right but momentarily overloaded) and nobody could
+       tell which from outside. */
+    const q = (req.query && req.query.probe) || (req.url && req.url.includes("probe=models") ? "models" : "");
+    if (q === "models" && GEMINI_KEY) {
+      try {
+        const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(GEMINI_KEY) + "&pageSize=200");
+        const j = await r.json();
+        if (!r.ok) { res.status(200).json({ error: "ListModels HTTP " + r.status, detail: j }); return; }
+        const models = (Array.isArray(j.models) ? j.models : [])
+          .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+          .map((m) => ({ name: String(m.name || "").replace(/^models\//, ""), displayName: m.displayName || "" }));
+        res.status(200).json({ models, candidatesConfigured: GEMINI_MODEL_CANDIDATES, candidatesStillListed: GEMINI_MODEL_CANDIDATES.filter((c) => models.some((m) => m.name === c)) });
+      } catch (e) {
+        res.status(200).json({ error: (e && e.message) || String(e) });
+      }
+      return;
+    }
     res.status(200).json({ configured: { firebaseKey: !!FBKEY, geminiKey: !!GEMINI_KEY }, ready: !!(FBKEY && GEMINI_KEY) });
     return;
   }
