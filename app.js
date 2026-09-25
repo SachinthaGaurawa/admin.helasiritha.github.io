@@ -2010,7 +2010,13 @@ renderers.guests = function () {
          over them before saving, especially for less common names. */
       '<p class="hint">ඕනෑම එකක් type කරන්න — අනිත් භාෂා දෙකෙන්ම නම ස්වයංක්‍රීයව පුරවයි (පරීක්ෂා කර නිවැරදි කරන්න)</p>' +
       '<div class="grid3">' + fld("නම — සිංහල", "g_name_si", "") + fld("නම — English", "g_name_en", "") + fld("නම — தமிழ்", "g_name_ta", "") + '</div>' +
+      '<div class="ai-tri-row" style="margin:-6px 0 10px">' +
+        '<button class="btn xs ghost ai-tri-btn" type="button" data-ai-base="g_name">✨ AI පරිවර්තනය</button>' +
+        '<span class="ai-tri-status" id="g_name_aiStatus"></span></div>' +
       '<div class="grid3">' + fld("පවුලේ නාමය — සිංහල (විකල්ප)", "g_family_si", "") + fld("පවුලේ නාමය — English (විකල්ප)", "g_family_en", "") + fld("පවුලේ නාමය — தமிழ் (විකල්ප)", "g_family_ta", "") + '</div>' +
+      '<div class="ai-tri-row" style="margin:-6px 0 10px">' +
+        '<button class="btn xs ghost ai-tri-btn" type="button" data-ai-base="g_family">✨ AI පරිවර්තනය</button>' +
+        '<span class="ai-tri-status" id="g_family_aiStatus"></span></div>' +
       '<div class="grid2">' +
         '<div class="field"><label for="g_side">පාර්ශවය</label><select class="inp" id="g_side">' +
           '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
@@ -2065,6 +2071,8 @@ renderers.guests = function () {
 
   wireNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
   wireNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
+  wireTrioButton({ base: "g_name", si: "g_name_si", en: "g_name_en", ta: "g_name_ta" }, "name");
+  wireTrioButton({ base: "g_family", si: "g_family_si", en: "g_family_en", ta: "g_family_ta" }, "name");
   $("#gAdd").onclick = async () => {
     const nameSi = stripZW($("#g_name_si").value.trim()), nameEn = stripZW($("#g_name_en").value.trim()), nameTa = stripZW($("#g_name_ta").value.trim());
     const familySi = stripZW($("#g_family_si").value.trim()), familyEn = stripZW($("#g_family_en").value.trim()), familyTa = stripZW($("#g_family_ta").value.trim());
