@@ -348,6 +348,14 @@ const CONTENT_DEFAULT = {
   poruwaTime: "පෙ.ව. 09.28",
   heroImageUrl: "",
   loveNote: "ආදරයෙන් හා කෘතඥතාවයෙන් පිරුණු හදවත් සමඟ, අපගේ ජීවිතයේ මෙම සුන්දර පරිච්ඡේදය ඔබ සමඟ සැමරීමට ලැබීම ගැන අපි ඉතා සතුටු වෙමු.",
+  /* Empty by default, same as bridePreLine/groomPreLine's own En/Ta pair --
+     reported bug: the public site had NO way to show a custom English/
+     Tamil love note at all, always silently falling back to its own
+     hardcoded per-language default text (see app.js's loveNoteDefault)
+     regardless of what the admin set here, since only the Sinhala field
+     existed. Left blank means "use the site's own built-in default for
+     that language", matching every other optional field in this schema. */
+  loveNoteEn: "", loveNoteTa: "",
   loveSign: "කෞෂානි & ගෞරව",
   phone: "", whatsapp: "", ambientAudioUrl: "",
   rsvpOpen: true,
@@ -434,6 +442,14 @@ function loadUpTestReport() {
 }
 let upTestReport = loadUpTestReport();
 let pubDirReport = "";
+/* Same persisted-report pattern as upTestReport above, for the Gemini
+   real-call test (see checkAiDiag()'s own comment for why the passive GET
+   check alone was reported as misleading -- this is the genuine
+   end-to-end verification). */
+function loadAiTestReport() {
+  try { return localStorage.getItem("hs_sec_aitest") || ""; } catch (_) { return ""; }
+}
+let aiTestReport = loadAiTestReport();
 /* Same reasoning as pubDirReport/upTestReport above, for the visits-write
    probe: its own write to /visits is exactly what the live onSnapshot
    listener driving this whole panel reacts to, so a re-render can (and in
@@ -1428,6 +1444,28 @@ async function nameVariants(text, srcLang) {
    from a real keystroke rather than this function's own programmatic
    write). ids: {en, si, ta} -- the three <input> element ids for one name
    (either the guest's given name or family name). */
+/* Core fill step, shared by the automatic debounced listener (wireNameTrio
+   below) and the "translate everything on this page" master button
+   (translateAllDetails() further down) -- both need the exact same
+   "compute variants from whichever field changed, fill the other two
+   unless hand-edited" behavior, just triggered differently. */
+async function fillNameTrioFrom(els, lang) {
+  const text = els[lang].value.trim();
+  if (!text) return;
+  const variants = await nameVariants(text, lang);
+  Object.keys(variants).forEach(k => {
+    const el = els[k];
+    if (!el || el === els[lang] || el.dataset.userEdited) return;
+    el.value = variants[k];
+    /* Setting .value directly never fires "input" -- without this the
+       sibling's .txt-display overlay (see syncTxtDisplays()) would
+       keep showing stale/placeholder text even though the field was
+       just auto-filled, defeating the whole point of the auto-fill
+       (the admin is meant to SEE and review it before saving). */
+    const disp = document.getElementById(el.id + "_disp");
+    if (disp) paintTxtDisplay(disp, el);
+  });
+}
 function wireNameTrio(ids) {
   const els = { en: $("#" + ids.en), si: $("#" + ids.si), ta: $("#" + ids.ta) };
   if (!els.en || !els.si || !els.ta) return;
@@ -1444,26 +1482,10 @@ function wireNameTrio(ids) {
       if (els[lang].value.trim()) els[lang].dataset.userEdited = "1";
       else delete els[lang].dataset.userEdited;
       clearTimeout(debounceT);
-      debounceT = setTimeout(async () => {
-        const text = els[lang].value.trim();
-        if (!text) return;
-        /* `lang` (this field's own designated script), not content-sniffed --
-           each of the three inputs already tells wireNameTrio which script it
-           holds; nameVariants() just needs to know which one changed. */
-        const variants = await nameVariants(text, lang);
-        Object.keys(variants).forEach(k => {
-          const el = els[k];
-          if (!el || el === els[lang] || el.dataset.userEdited) return;
-          el.value = variants[k];
-          /* Setting .value directly never fires "input" -- without this the
-             sibling's .txt-display overlay (see syncTxtDisplays()) would
-             keep showing stale/placeholder text even though the field was
-             just auto-filled, defeating the whole point of the auto-fill
-             (the admin is meant to SEE and review it before saving). */
-          const disp = document.getElementById(el.id + "_disp");
-          if (disp) paintTxtDisplay(disp, el);
-        });
-      }, 500);
+      /* `lang` (this field's own designated script), not content-sniffed --
+         each of the three inputs already tells wireNameTrio which script it
+         holds; nameVariants() just needs to know which one changed. */
+      debounceT = setTimeout(() => fillNameTrioFrom(els, lang), 500);
     });
   });
 }
@@ -1496,19 +1518,23 @@ function resetNameTrio(ids) {
    safety net as every other auto-generated field in this admin panel. */
 async function aiTranslate(text, fromLang, toLang, fieldContext) {
   if (!text) return null;
+  /* Returns { error } rather than a bare null on failure -- the FIRST
+     reported failure showed only a generic "අසාර්ථකයි" in the admin UI
+     with no way to tell what actually went wrong, from a screenshot alone,
+     without going and reading server logs by hand every time. */
   try {
-    const u = auth.currentUser; if (!u) return null;
+    const u = auth.currentUser; if (!u) return { error: "signed out" };
     const token = await u.getIdToken();
     const r = await fetch(AI_TRANSLATE_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
       body: JSON.stringify({ text, fromLang, toLang, fieldContext })
     });
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (!j || !j.ok) return null;
+    let j = null; try { j = await r.json(); } catch (_) {}
+    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
+    if (!j || !j.ok) return { error: "unexpected response shape" };
     return { translation: j.translation, confidence: j.confidence, note: j.note };
-  } catch (_) { return null; }
+  } catch (e) { return { error: (e && e.message) || "network error" }; }
 }
 /* Unlike wireNameTrio() (automatic, debounced, fires on every keystroke --
    fine for a fast free phonetic lookup), this is a single explicit button
@@ -1519,7 +1545,83 @@ async function aiTranslate(text, fromLang, toLang, fieldContext) {
    generated from whichever field they most recently typed into (tracked
    via dataset.lastEdited, since more than one field can hold text -- e.g.
    a previous save's values -- at once). */
-function wireAiTrio(ids, fieldContext) {
+/* Core translate step, shared by the per-trio button (wireAiTrio below) and
+   the "translate everything on this page" master button
+   (translateAllDetails() further down). Returns true if it actually had
+   something to translate, false if the trio was empty (so the master
+   button can silently skip empty trios instead of erroring on every one
+   the admin hasn't gotten to yet). */
+async function runAiTrio(els, fieldContext, status, btn) {
+  const entries = Object.entries(els).filter(([, el]) => el.value.trim());
+  if (!entries.length) return false;
+  entries.sort((a, b) => Number(b[1].dataset.lastEdited || 0) - Number(a[1].dataset.lastEdited || 0));
+  const [srcLang, srcEl] = entries[0];
+  const text = srcEl.value.trim();
+  const targets = ["si", "en", "ta"].filter(l => l !== srcLang);
+  if (btn) btn.disabled = true;
+  status.textContent = "🔄 AI පරිවර්තනය වෙමින්...";
+  try {
+    const results = await Promise.all(targets.map(toLang => aiTranslate(text, srcLang, toLang, fieldContext)));
+    const failed = results.find(r => r && r.error);
+    if (failed) throw new Error(failed.error);
+    let worst = "high";
+    targets.forEach((toLang, i) => {
+      const r = results[i];
+      const el = els[toLang];
+      el.value = r.translation;
+      el.dataset.lastEdited = "0"; // AI-written just now, not hand-edited -- a later click may still overwrite it
+      if (r.confidence !== "high") el.title = "AI (" + r.confidence + " confidence)" + (r.note ? " — " + r.note : "");
+      else el.removeAttribute("title");
+      if (r.confidence === "low" || (r.confidence === "medium" && worst === "high")) worst = r.confidence;
+    });
+    syncTxtDisplays(); // .value set directly above never fires "input" -- repaint the txt-display overlays
+    status.innerHTML = worst === "high"
+      ? '<span style="color:var(--ok)">✓ AI පරිවර්තනය කළා — පරීක්ෂා කර සුරකින්න</span>'
+      : '<span style="color:var(--warn)">⚠ AI පරිවර්තනය කළා (අවිනිශ්චිත කොටස් ඇත) — හොඳින් පරීක්ෂා කරන්න</span>';
+    return true;
+  } catch (e) {
+    /* Shows the ACTUAL reason inline, not just a bare generic message --
+       the exact gap that made the first reported failure impossible to
+       diagnose from a screenshot alone (hover-only tooltips don't work
+       on mobile either, so the reason is printed directly, not hidden
+       behind a title attribute). Full detail is always in Vercel's
+       server logs regardless. */
+    const reason = ((e && e.message) || "").slice(0, 160);
+    status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න' +
+      (reason ? '<br><span style="font-size:.76rem;opacity:.85">' + esc(reason) + '</span>' : '') + '</span>';
+    return true; // it DID have something to translate, it just failed -- still "handled", not "empty"
+  } finally { if (btn) btn.disabled = false; }
+}
+/* The "name" engine's own core step, mirroring runAiTrio()'s shape exactly
+   (same return convention, same status/button handling) so wireTrioButton()
+   and translateAllDetails() can treat both engines identically. Reuses
+   fillNameTrioFrom() -- the exact same phonetic transliteration already
+   proven correct and free for guest names -- rather than routing a
+   person's or place's name through the slower, non-free Gemini path,
+   which brings no accuracy benefit here (a name has no "meaning" to
+   translate, only a sound to respell) and would needlessly burn quota. */
+async function runNameTrio(els, status, btn) {
+  const entries = Object.entries(els).filter(([, el]) => el.value.trim());
+  if (!entries.length) return false;
+  entries.sort((a, b) => Number(b[1].dataset.lastEdited || 0) - Number(a[1].dataset.lastEdited || 0));
+  const [lang] = entries[0];
+  if (btn) btn.disabled = true;
+  status.textContent = "🔄 පරිවර්තනය වෙමින්...";
+  try {
+    await fillNameTrioFrom(els, lang);
+    status.innerHTML = '<span style="color:var(--ok)">✓ පරිවර්තනය කළා — පරීක්ෂා කර සුරකින්න</span>';
+  } catch (e) {
+    status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න</span>';
+  } finally { if (btn) btn.disabled = false; }
+  return true;
+}
+/* Wires ONE trio's explicit button (both engines render the identical
+   button+status markup -- see tri() in renderers.details) to whichever
+   engine it needs. This is on top of, not instead of, wireNameTrio()'s own
+   automatic per-keystroke fill for "name" trios -- the button is an
+   explicit "run it again right now" action layered over behavior that
+   already happens automatically as the admin types. */
+function wireTrioButton(ids, engine, context) {
   const els = { si: $("#" + ids.si), en: $("#" + ids.en), ta: $("#" + ids.ta) };
   const btn = document.querySelector('.ai-tri-btn[data-ai-base="' + ids.base + '"]');
   const status = document.getElementById(ids.base + "_aiStatus");
@@ -1530,36 +1632,48 @@ function wireAiTrio(ids, fieldContext) {
     el.addEventListener("input", () => { el.dataset.lastEdited = String(Date.now()); });
   });
   btn.onclick = async () => {
-    const entries = Object.entries(els).filter(([, el]) => el.value.trim());
-    if (!entries.length) { status.textContent = "⚠ පළමුව එක් භාෂාවකින්වත් type කරන්න"; return; }
-    entries.sort((a, b) => Number(b[1].dataset.lastEdited || 0) - Number(a[1].dataset.lastEdited || 0));
-    const [srcLang, srcEl] = entries[0];
-    const text = srcEl.value.trim();
-    const targets = ["si", "en", "ta"].filter(l => l !== srcLang);
-    btn.disabled = true; status.textContent = "🔄 AI පරිවර්තනය වෙමින්...";
-    try {
-      const results = await Promise.all(targets.map(toLang => aiTranslate(text, srcLang, toLang, fieldContext)));
-      if (results.some(r => !r)) throw new Error("upstream failure");
-      let worst = "high";
-      targets.forEach((toLang, i) => {
-        const r = results[i];
-        const el = els[toLang];
-        el.value = r.translation;
-        el.dataset.lastEdited = "0"; // AI-written just now, not hand-edited -- a later click may still overwrite it
-        if (r.confidence !== "high") el.title = "AI (" + r.confidence + " confidence)" + (r.note ? " — " + r.note : "");
-        else el.removeAttribute("title");
-        if (r.confidence === "low" || (r.confidence === "medium" && worst === "high")) worst = r.confidence;
-      });
-      syncTxtDisplays(); // .value set directly above never fires "input" -- repaint the txt-display overlays
-      status.innerHTML = worst === "high"
-        ? '<span style="color:var(--ok)">✓ AI පරිවර්තනය කළා — පරීක්ෂා කර සුරකින්න</span>'
-        : '<span style="color:var(--warn)">⚠ AI පරිවර්තනය කළා (අවිනිශ්චිත කොටස් ඇත) — හොඳින් පරීක්ෂා කරන්න</span>';
-    } catch (_) {
-      status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න</span>';
-    } finally { btn.disabled = false; }
+    const handled = engine === "ai" ? await runAiTrio(els, context, status, btn) : await runNameTrio(els, status, btn);
+    if (!handled) status.textContent = "⚠ පළමුව එක් භාෂාවකින්වත් type කරන්න";
   };
 }
 
+/* A +/- stepper in place of a bare <input type=number> -- see .mini-stepper's
+   own CSS comment for why (the Safari white-box-at-rest bug, applied to a
+   class the earlier .inp/.txt-wrap fixes never touched). min=0 with no
+   dash param means "0 displays as --" (used for table-number's "no table
+   assigned yet" state); pass dash=false for a field that's always a real
+   number (guest count). */
+const stepper = (cls, id, val, min, max) =>
+  '<div class="mini-stepper ' + cls + '" data-id="' + esc(id) + '" data-min="' + min + '" data-max="' + max + '">' +
+  '<button type="button" class="mini-step-btn mini-step-dn" aria-label="අඩු කරන්න">−</button>' +
+  '<span class="mini-step-val">' + esc(val > 0 || min > 0 ? String(val) : "—") + '</span>' +
+  '<button type="button" class="mini-step-btn mini-step-up" aria-label="වැඩි කරන්න">+</button>' +
+  '</div>';
+/* Wires every .mini-stepper matching sel (called fresh after each render,
+   same as bind() elsewhere in this file -- a full re-render always creates
+   brand new elements, so no dedicated "already wired" guard is needed).
+   onCommit(id, n) is awaited before re-enabling the buttons, so a slow or
+   failed write can't be raced by a second rapid click. */
+function wireSteppers(sel, onCommit) {
+  $$(sel).forEach(wrap => {
+    const valEl = wrap.querySelector(".mini-step-val");
+    const min = Number(wrap.dataset.min), max = Number(wrap.dataset.max);
+    const id = wrap.dataset.id;
+    const dnBtn = wrap.querySelector(".mini-step-dn"), upBtn = wrap.querySelector(".mini-step-up");
+    const current = () => { const n = parseInt(valEl.textContent, 10); return Number.isFinite(n) ? n : min; };
+    const paint = (n) => { valEl.textContent = (n <= 0 && min === 0) ? "—" : String(n); };
+    const step = (delta) => async () => {
+      const n = Math.max(min, Math.min(max, current() + delta));
+      if (n === current()) return;
+      dnBtn.disabled = upBtn.disabled = true;
+      paint(n); // optimistic -- onCommit's own try/catch (matching every other bind() handler in this file) already toasts on failure; a live Firestore update corrects this row regardless
+      await onCommit(id, n);
+      dnBtn.disabled = upBtn.disabled = false;
+    };
+    dnBtn.onclick = step(-1);
+    upBtn.onclick = step(1);
+  });
+}
 const card = (inner, cls) => '<div class="card' + (cls ? " " + cls : "") + '">' + inner + '</div>';
 const stat = (v, l, cls) => '<div class="stat' + (cls ? " " + cls : "") + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></div>';
 const swRow = (label, hint, id, on) =>
@@ -1642,42 +1756,49 @@ renderers.dashboard = function () {
 /* ════════════════════════ 2 · WEDDING DETAILS ══════════════════════════════ */
 renderers.details = function () {
   const c = content;
-  /* aiContext (7th arg, optional): when present, this trio is a real
-     SENTENCE/PHRASE (not a name) and gets a "✨ AI පරිවර්තනය" button instead
-     of (or alongside) manual entry -- wired below by wireAiTrio(). Name/
-     place trios (brideName, venue, etc.) pass nothing here and keep using
-     the phonetic wireNameTrio() mechanism instead; see aiTranslateTrios
-     below for why these two are never the same trio. */
-  const tri = (base, label, si, en, ta, type, aiContext) =>
+  /* engine (7th arg): "name" for a personal/place name (phonetic
+     transliteration, same word respelled across scripts -- wireNameTrio()
+     still handles the automatic per-keystroke fill; the button here is an
+     additional explicit "run it again now" action, same visible AI
+     branding as every other trio, per admin request for a consistent
+     experience across the whole panel) or "ai" for a real sentence/phrase
+     (meaning-based translation via Gemini, context in the 8th arg --
+     wired below by wireTrioButton()/runAiTrio()). Both engines render the
+     identical button+status row; only what happens on click differs. */
+  const tri = (base, label, si, en, ta, type, engine, context) =>
     '<div class="grid3">' + fld(label + " (සිංහල)", base + "Si_", si, type) +
       fld(label + " (English)", base + "En_", en, type) + fld(label + " (தமிழ்)", base + "Ta_", ta, type) + '</div>' +
-    (aiContext ? '<div class="ai-tri-row">' +
+    (engine ? '<div class="ai-tri-row">' +
       '<button class="btn sm ghost ai-tri-btn" type="button" data-ai-base="' + base + '">✨ AI පරිවර්තනය කරන්න</button>' +
       '<span class="ai-tri-status" id="' + base + '_aiStatus"></span></div>' : '');
 
   $("#p-details").innerHTML =
     '<div class="card lock-bar" id="detailsLockBar"></div>' +
+    '<div class="card ai-tri-row" style="gap:14px">' +
+      '<button class="btn primary" id="translateAllBtn" type="button">✨ මේ පිටුවේ තියෙන සියල්ල AI පරිවර්තනය කරන්න</button>' +
+      '<span class="ai-tri-status" id="translateAllStatus" style="font-size:.85rem">යටින් තියෙන trio එකකින් අඩුම ගානේ එක් භාෂාවක් type කරලා තියෙනවා නම්, අනිත් දෙකම මෙතනින් එකවර පුරවා ගන්න පුළුවන්</span>' +
+    '</div>' +
     card('<h3>මනාල යුවළ</h3><p class="hint">මනාලිය මුලින් · තුන් භාෂාවෙන්ම (පොදු පිටුව + සන්නස දෙකටම යෙදේ)</p>' +
-      tri("brideName", "මනාලියගේ නම", c.brideName, c.brideNameEn, c.brideNameTa) +
-      tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa) +
+      tri("brideName", "මනාලියගේ නම", c.brideName, c.brideNameEn, c.brideNameTa, null, "name") +
+      tri("groomName", "මනාලයාගේ නම", c.groomName, c.groomNameEn, c.groomNameTa, null, "name") +
       '<p class="hint" style="padding-inline-start:13px">පියාගේ නම (මුලකුරු + වාසගම) සහ පසුව එන වාක්‍ය ඛණ්ඩය වෙන් වෙන්ව. ' +
       'උදා: <b>ඩබ්ලිව්.පී.ජී. වික්‍රමසිංහ</b> + <b>මහත්මා සහ එම මැතිනියගේ ආදරණීය දියණිය වූ,</b></p>' +
-      tri("brideFather", "කෞෂානිගේ පියාගේ නම (මුලකුරු + වාසගම)", c.brideFather || "", c.brideFatherEn || "", c.brideFatherTa || "") +
-      tri("brideParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.bridePreLine, c.bridePreLineEn || "", c.bridePreLineTa || "", "textarea",
+      tri("brideFather", "කෞෂානිගේ පියාගේ නම (මුලකුරු + වාසගම)", c.brideFather || "", c.brideFatherEn || "", c.brideFatherTa || "", null, "name") +
+      tri("brideParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.bridePreLine, c.bridePreLineEn || "", c.bridePreLineTa || "", "textarea", "ai",
         "A formal wedding-invitation phrase introducing the bride, following her father's name -- e.g. \"the beloved daughter of Mr. & Mrs.\"") +
-      tri("groomFather", "ගෞරවගේ පියාගේ නම (මුලකුරු + වාසගම)", c.groomFather || "", c.groomFatherEn || "", c.groomFatherTa || "") +
-      tri("groomParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.groomPreLine, c.groomPreLineEn || "", c.groomPreLineTa || "", "textarea",
+      tri("groomFather", "ගෞරවගේ පියාගේ නම (මුලකුරු + වාසගම)", c.groomFather || "", c.groomFatherEn || "", c.groomFatherTa || "", null, "name") +
+      tri("groomParents", "එයට පසුව එන වාක්‍ය ඛණ්ඩය", c.groomPreLine, c.groomPreLineEn || "", c.groomPreLineTa || "", "textarea", "ai",
         "A formal wedding-invitation phrase introducing the groom, following his father's name -- e.g. \"the beloved son of Mr. & Mrs.\"")) +
 
     card('<h3>දිනය · වේලාව · ස්ථානය</h3><p class="hint">දිනය තෝරන විට සිංහල/English/தமிழ் දින පෙළ ස්වයංක්‍රීයව සැකසේ</p>' +
       '<div class="grid2">' + fld("මංගල දිනය හා වේලාව", "f_date", toLocalInput(c.dateISO), "datetime-local") +
         fld("පෝරු වේලාව", "f_poruwaTime", c.poruwaTime) + '</div>' +
       '<div class="field"><label>ස්වයංක්‍රීය දින පෙළ</label><input class="inp" id="f_datePrev" readonly></div>' +
-      tri("ceremonyTime", "උත්සව වේලාව", c.ceremonyTime, c.ceremonyTimeEn, c.ceremonyTimeTa, null,
+      tri("ceremonyTime", "උත්සව වේලාව", c.ceremonyTime, c.ceremonyTimeEn, c.ceremonyTimeTa, null, "ai",
         "A short phrase stating the wedding ceremony's time on the invitation -- e.g. \"9.00 a.m. onwards\"") +
-      tri("venue", "ස්ථානයේ නම", c.venue, c.venueEn, c.venueTa) +
+      tri("venue", "ස්ථානයේ නම", c.venue, c.venueEn, c.venueTa, null, "name") +
       fld("Google Maps සබැඳිය", "f_venueMapUrl", c.venueMapUrl) +
-      tri("venueCity", "නගරය", c.venueCity, c.venueCityEn, c.venueCityTa)) +
+      tri("venueCity", "නගරය", c.venueCity, c.venueCityEn, c.venueCityTa, null, "name")) +
 
     card('<h3>ආරාධනා සන්නසේ පෙළ</h3><p class="hint">සන්නස (invitation scroll) සඳහා පමණක් · හිස්ව තැබුවොත් පෙරනිමි පෙළ යෙදේ · ' +
       'ඉහත මනාල යුවළ / දිනය-වේලාව-ස්ථානය කොටස් වල වෙනස්කම් ද සන්නසට ස්වයංක්‍රීයව යෙදේ</p>' +
@@ -1711,7 +1832,9 @@ renderers.details = function () {
       '</div><iframe class="sannasa-preview-frame" id="sannasaPreviewFrame" src="https://helasiritha.vercel.app/sannasa.html" title="සන්නස පෙරදසුන"></iframe></div>') +
 
     card('<h3>ආදර සටහන හා සම්බන්ධතා</h3>' +
-      fld("ආදර සටහන (Love Note)", "f_loveNote", c.loveNote, "textarea") +
+      '<p class="hint">හිස්ව තැබුවොත් ඒ භාෂාවට පොදු අඩවියේම පෙරනිමි පණිවිඩය පෙන්වේ</p>' +
+      tri("loveNote", "ආදර සටහන (Love Note)", c.loveNote, c.loveNoteEn || "", c.loveNoteTa || "", "textarea", "ai",
+        "A warm, heartfelt thank-you message from the couple to their wedding guests, for a formal wedding invitation website") +
       /* Left blank whenever it still matches "<bride> & <groom>" for the
          CURRENTLY SAVED names -- i.e. nobody ever customised it, it's just
          the auto-generated form. Pre-filling it with that stale text made
@@ -1739,40 +1862,59 @@ renderers.details = function () {
     $("#f_datePrev").value = d ? (d.si + "  ·  " + d.en + "  ·  " + d.ta) : "—";
   };
   $("#f_date").oninput = paintDate; paintDate();
-  /* Same auto-fill wiring as the guest-name trio (wireNameTrio()) -- but
-     ONLY for fields that are actually personal/place NAMES, where phonetic
-     transliteration (same word, respelled across scripts) is the right
-     operation. Deliberately NOT wired here: bridePreLine/groomPreLine
-     ("the beloved daughter of Mr. & Mrs." etc.), ceremonyTime ("9.00 a.m.
-     onwards"), and every sannasa-scroll field (join/sannasaBody/poruwa/sri/
-     eyebrow/lDate/lTime/lVenue/cue) -- those are complete sentences and
-     short UI-label words that need real MEANING-based translation, a
-     fundamentally different (and unbuilt) capability. Running this
-     transliteration engine on a sentence would not "roughly" translate it
-     -- it would phonetically respell the Sinhala sounds letter-by-letter
-     into nonsense Latin/Tamil text with no relation to the sentence's
-     actual English/Tamil wording, actively corrupting a field that
-     currently holds a real, correct manual translation. */
+  /* Every trio on this page, name/place ("name" engine -- fast free
+     phonetic transliteration, still also auto-fills per-keystroke via
+     wireNameTrio() below, same as ever) or sentence/phrase ("ai" engine --
+     real Gemini translation, since running phonetic transliteration on a
+     full sentence would respell its SOUNDS, not translate its MEANING,
+     producing nonsense). One shared list drives both the per-trio button
+     wiring and the "translate everything on this page" master button
+     (translateAllDetails() below), so the two can never drift out of sync
+     with each other or with the context strings tri() used to render the
+     buttons above. */
+  const DETAILS_TRIOS = [
+    ["brideName", "name"], ["groomName", "name"], ["brideFather", "name"], ["venue", "name"], ["venueCity", "name"], ["groomFather", "name"],
+    ["brideParents", "ai", "A formal wedding-invitation phrase introducing the bride, following her father's name -- e.g. \"the beloved daughter of Mr. & Mrs.\""],
+    ["groomParents", "ai", "A formal wedding-invitation phrase introducing the groom, following his father's name -- e.g. \"the beloved son of Mr. & Mrs.\""],
+    ["ceremonyTime", "ai", "A short phrase stating the wedding ceremony's time on the invitation -- e.g. \"9.00 a.m. onwards\""],
+    ["join", "ai", "A formal wedding-invitation-scroll sentence announcing the couple's union/marriage"],
+    ["sannasaBody", "ai", "The main formal invitation paragraph of a traditional Sri Lankan wedding invitation scroll (sannasa), inviting guests to attend"],
+    ["poruwa", "ai", "A sentence naming the auspicious time (poruwa ceremony muhurtham) on a traditional Sri Lankan wedding invitation"],
+    ["sri", "ai", "The ornamental \"Sri\" auspicious mark at the top of a Sri Lankan wedding invitation scroll"],
+    ["eyebrow", "ai", "The small heading/eyebrow line above the main title of a wedding invitation scroll"],
+    ["lDate", "ai", "The short field label word \"Date\" as used on a formal wedding invitation"],
+    ["lTime", "ai", "The short field label word \"Time\" as used on a formal wedding invitation"],
+    ["lVenue", "ai", "The short field label word \"Venue\" as used on a formal wedding invitation"],
+    ["cue", "ai", "A short closing/prompt line at the end of a wedding invitation scroll"],
+    ["loveNote", "ai", "A warm, heartfelt thank-you message from the couple to their wedding guests, for a formal wedding invitation website"],
+  ];
   ["brideName", "groomName", "brideFather", "groomFather", "venue", "venueCity"].forEach(base =>
     wireNameTrio({ si: base + "Si_", en: base + "En_", ta: base + "Ta_" }));
-  /* The sentence/phrase trios (aiContext passed to tri() above) get the
-     real-translation button instead -- context string kept in sync with
-     each tri() call above, describing what that specific field actually
-     is so the model translates it in the right register. */
-  [
-    ["brideParents", "A formal wedding-invitation phrase introducing the bride, following her father's name -- e.g. \"the beloved daughter of Mr. & Mrs.\""],
-    ["groomParents", "A formal wedding-invitation phrase introducing the groom, following his father's name -- e.g. \"the beloved son of Mr. & Mrs.\""],
-    ["ceremonyTime", "A short phrase stating the wedding ceremony's time on the invitation -- e.g. \"9.00 a.m. onwards\""],
-    ["join", "A formal wedding-invitation-scroll sentence announcing the couple's union/marriage"],
-    ["sannasaBody", "The main formal invitation paragraph of a traditional Sri Lankan wedding invitation scroll (sannasa), inviting guests to attend"],
-    ["poruwa", "A sentence naming the auspicious time (poruwa ceremony muhurtham) on a traditional Sri Lankan wedding invitation"],
-    ["sri", "The ornamental \"Sri\" auspicious mark at the top of a Sri Lankan wedding invitation scroll"],
-    ["eyebrow", "The small heading/eyebrow line above the main title of a wedding invitation scroll"],
-    ["lDate", "The short field label word \"Date\" as used on a formal wedding invitation"],
-    ["lTime", "The short field label word \"Time\" as used on a formal wedding invitation"],
-    ["lVenue", "The short field label word \"Venue\" as used on a formal wedding invitation"],
-    ["cue", "A short closing/prompt line at the end of a wedding invitation scroll"],
-  ].forEach(([base, ctx]) => wireAiTrio({ base, si: base + "Si_", en: base + "En_", ta: base + "Ta_" }, ctx));
+  DETAILS_TRIOS.forEach(([base, engine, ctx]) =>
+    wireTrioButton({ base, si: base + "Si_", en: base + "En_", ta: base + "Ta_" }, engine, ctx));
+  /* The master button: runs every trio's own translate step in sequence
+     (not Promise.all -- 14 trios firing in parallel would be up to ~28
+     simultaneous Gemini requests, a real rate-limit risk, and the admin
+     can't usefully read 14 status lines updating at once anyway). Skips a
+     trio silently if it has nothing typed anywhere yet (runNameTrio/
+     runAiTrio both return false for that) rather than showing 14 "type
+     something first" warnings for fields the admin hasn't reached. */
+  $("#translateAllBtn").onclick = async () => {
+    const btn = $("#translateAllBtn"), status = $("#translateAllStatus");
+    btn.disabled = true;
+    let done = 0, skipped = 0;
+    for (const [base, engine, ctx] of DETAILS_TRIOS) {
+      const els = { si: $("#" + base + "Si_"), en: $("#" + base + "En_"), ta: $("#" + base + "Ta_") };
+      const localStatus = document.getElementById(base + "_aiStatus");
+      if (!els.si || !els.en || !els.ta || !localStatus) continue;
+      status.textContent = "🔄 (" + (done + skipped + 1) + "/" + DETAILS_TRIOS.length + ") " + base + " පරිවර්තනය වෙමින්...";
+      const handled = engine === "ai" ? await runAiTrio(els, ctx, localStatus, null) : await runNameTrio(els, localStatus, null);
+      if (handled) done++; else skipped++;
+    }
+    status.innerHTML = '<span style="color:var(--ok)">✓ ' + done + ' trio පරිවර්තනය කළා' +
+      (skipped ? ' · ' + skipped + ' හිස්ව තිබූ නිසා මඟහැරිණි' : '') + ' — හැම field එකක්ම පරීක්ෂා කර සුරකින්න</span>';
+    btn.disabled = false;
+  };
 
   $("#saveDetails").onclick = async () => {
     const btn = $("#saveDetails"); btn.disabled = true; btn.textContent = "සුරකිමින්…";
@@ -1794,7 +1936,8 @@ renderers.details = function () {
       ceremonyTime: v("ceremonyTimeSi_"), ceremonyTimeEn: v("ceremonyTimeEn_"), ceremonyTimeTa: v("ceremonyTimeTa_"),
       venue: v("venueSi_"), venueEn: v("venueEn_"), venueTa: v("venueTa_"), venueMapUrl: v("f_venueMapUrl"),
       venueCity: v("venueCitySi_"), venueCityEn: v("venueCityEn_"), venueCityTa: v("venueCityTa_"),
-      loveNote: v("f_loveNote"), loveSign: v("f_loveSign") || (bSi + " & " + gSi),
+      loveNote: v("loveNoteSi_"), loveNoteEn: v("loveNoteEn_"), loveNoteTa: v("loveNoteTa_"),
+      loveSign: v("f_loveSign") || (bSi + " & " + gSi),
       phone: v("f_phone"), whatsapp: v("f_whatsapp"), ambientAudioUrl: v("f_ambientAudioUrl"),
       /* invitation scroll (සන්නස) mirrors — keeps the decree in perfect sync */
       brideNameSi: bSi, groomNameSi: gSi,
@@ -1901,9 +2044,9 @@ renderers.guests = function () {
             '<td><input class="mini k-name" data-id="' + g.id + '" value="' + esc(g.name) + '" style="min-width:118px"></td>' +
             '<td><input class="mini k-fam" data-id="' + g.id + '" value="' + esc(g.family) + '" style="min-width:104px"></td>' +
             '<td><select class="mini k-side" data-id="' + g.id + '"><option value="bride"' + (g.side === "bride" ? " selected" : "") + '>කෞෂානි</option><option value="groom"' + (g.side === "groom" ? " selected" : "") + '>ගෞරව</option></select></td>' +
-            '<td><input class="mini k-count num" data-id="' + g.id + '" type="number" min="1" max="40" value="' + g.count + '" style="width:62px"></td>' +
+            '<td>' + stepper("k-count", g.id, g.count, 1, 40) + '</td>' +
             '<td><select class="mini k-status" data-id="' + g.id + '"><option value="pending"' + (g.status === "pending" ? " selected" : "") + '>පොරොත්තු</option><option value="confirmed"' + (g.status === "confirmed" ? " selected" : "") + '>තහවුරු</option><option value="declined"' + (g.status === "declined" ? " selected" : "") + '>නොපැමිණේ</option></select></td>' +
-            '<td><input class="mini k-table num" data-id="' + g.id + '" type="number" min="1" max="99" value="' + (g.tableNumber || "") + '" style="width:56px" placeholder="—"></td>' +
+            '<td>' + stepper("k-table", g.id, g.tableNumber || 0, 0, 99) + '</td>' +
             '<td><button class="btn xs bad k-del" data-id="' + g.id + '" type="button">මකන්න</button></td>' +
             '</tr>').join("") +
           '</tbody></table></div>' +
@@ -1990,8 +2133,8 @@ renderers.guests = function () {
     } catch (e) { toast("දෝෂයකි", "err"); }
   });
   bind(".k-side", async el => { try { await updGuest(el.dataset.id, { side: el.value }); toast("පාර්ශවය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
-  bind(".k-count", async el => { try { await updGuest(el.dataset.id, { count: clampInt(el.value, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
-  bind(".k-table", async el => { const v = el.value ? clampInt(el.value, 1, 99) : null; try { await updGuest(el.dataset.id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  wireSteppers(".k-count", async (id, n) => { try { await updGuest(id, { count: clampInt(n, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
+  wireSteppers(".k-table", async (id, n) => { const v = n > 0 ? clampInt(n, 1, 99) : null; try { await updGuest(id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-status", async el => {
     const g = effGuests().find(x => x.id === el.dataset.id); if (!g) return;
     const st = el.value;
@@ -2905,9 +3048,25 @@ async function checkResetDiag() {
 /* Same exact pattern as checkResetDiag() above, for the Gemini AI sentence-
    translation feature (see ai-translate.js) -- the admin asked for a
    real-time visible status so they can tell at a glance whether the
-   Gemini_API_Helasiritha key they set in Vercel actually took effect,
-   without needing to open the details panel and try translating something
-   first. */
+   Gemini_API_Helasiritha key they set in Vercel actually took effect.
+
+   IMPORTANT DISTINCTION, learned from a real reported bug: this passive
+   check (an unauthenticated GET, same as resetDiag above) can only ever
+   confirm the key is PRESENT, not that Gemini actually accepts it and
+   responds -- unlike reset-visits, where "both env vars present" reliably
+   means the operation works, a Gemini key can be present yet still fail
+   (wrong model name, safety-filter block, a referrer-restricted key,
+   quota/billing issues) for reasons this cheap check cannot see. The
+   wording below says "සකසා ඇත" (configured), never "සක්‍රීයයි" (active/
+   working) -- the reported bug was exactly this: a green "සක්‍රීයයි" here
+   while the real feature failed end-to-end, which is worse than no status
+   at all. Genuine end-to-end verification needs a real Gemini call, which
+   costs quota -- doing that from this unauthenticated GET would let
+   anyone who finds the URL burn through it by hitting it in a loop, so the
+   real test lives behind the admin-authenticated "පරීක්ෂා කරන්න" button
+   instead (testAiDiag() below), exactly mirroring how the photo-upload
+   diagnostic pairs a passive config check with a separate real signed
+   request. */
 let aiDiag = { state: "untested", reason: "" };
 let aiDiagChecked = false;
 async function checkAiDiag() {
@@ -2916,7 +3075,7 @@ async function checkAiDiag() {
   try {
     const r = await fetch(AI_TRANSLATE_ENDPOINT, { method: "GET" });
     const j = await r.json().catch(() => null);
-    if (r.ok && j && j.ready) aiDiag = { state: "ok", reason: "AI පරිවර්තනය සක්‍රීයයි (Gemini)" };
+    if (r.ok && j && j.ready) aiDiag = { state: "ok", reason: "Gemini key එක සකසා ඇත — සැබෑව පරීක්ෂා කිරීමට පහත බොත්තම ඔබන්න" };
     else if (r.ok && j) aiDiag = { state: "fail", reason: !j.configured.firebaseKey ? "FIREBASE_WEB_API_KEY සකසා නැත" : "Gemini_API_Helasiritha සකසා නැත" };
     else aiDiag = { state: "fail", reason: "HTTP " + r.status };
   } catch (e) {
@@ -3449,6 +3608,8 @@ renderers.security = function () {
         (aiDiag.state === "untested" ? "පරීක්ෂා කරමින්…"
           : aiDiag.state === "ok" ? esc(aiDiag.reason) : "සකසා නැත: " + esc(aiDiag.reason)) +
       '</div></div></div>' +
+      '<div class="row" style="margin:2px 0 8px"><button class="btn sm primary" id="secTestAi" type="button">Gemini සැබෑවම පරීක්ෂා කරන්න</button></div>' +
+      '<pre id="aiTest" class="up-test"' + (aiTestReport ? '>' + esc(aiTestReport) : ' hidden>') + '</pre>' +
       '<div class="row" style="margin-top:6px">' +
         '<span class="faint" style="font-size:.8rem">සැසිය මිනිත්තු ' + mins + 'ක් · අක්‍රීය මිනිත්තු 20කින් ස්වයංක්‍රීයව පිටවේ</span>' +
         '<span class="sp" style="flex:1"></span>' +
@@ -3545,6 +3706,47 @@ renderers.security = function () {
     renderers.security();
     paint(upTestReport);
     toast(sig ? "Signed උඩුගත කිරීම සූදානම් ✓" : "උඩුගත කිරීම සකසා නැත — විස්තර බලන්න", sig ? "ok" : "err");
+  };
+
+  /* The REAL end-to-end Gemini test -- unlike checkAiDiag()'s passive GET
+     (which can only see whether the key is PRESENT), this makes an actual
+     authenticated translate call and shows the genuine result or the exact
+     failure reason. This is the button that should have existed from the
+     start: a green "configured" indicator that doesn't reflect whether the
+     feature actually works is worse than no indicator at all. */
+  $("#secTestAi").onclick = async () => {
+    const btn = $("#secTestAi");
+    const paint = (txt) => {
+      aiTestReport = txt;
+      const el = $("#aiTest");
+      if (el) { el.hidden = false; el.textContent = txt; }
+    };
+    paint("පරීක්ෂා කරමින්… (Gemini ට සැබෑ request එකක් යවමින්)");
+    btn.disabled = true;
+    const lines = [];
+    const result = await aiTranslate("Thank you for celebrating with us.", "en", "si", "a short thank-you phrase, as a live diagnostic test");
+    if (result && !result.error) {
+      lines.push("✓ Gemini සැබෑවම පිළිතුරු දුන්නා.");
+      lines.push("  test text (en) : Thank you for celebrating with us.");
+      lines.push("  translation(si): " + result.translation);
+      lines.push("  confidence     : " + result.confidence);
+      lines.push("  ⇒ AI පරිවර්තන feature එක සම්පූර්ණයෙන්ම වැඩ කරනවා.");
+    } else {
+      lines.push("✗ Gemini ට request එක අසාර්ථක විය.");
+      lines.push("  error: " + ((result && result.error) || "unknown"));
+      lines.push("");
+      lines.push("  මෙය සාමාන්‍යයෙන් අදහස් කරන්නේ:");
+      lines.push("  • Gemini_API_Helasiritha key එක වැරදියි/expired, හෝ");
+      lines.push("  • Google AI Studio හි key එකට \"HTTP referrer\" restriction එකක් තියෙනවා");
+      lines.push("    (server-side call එකකට referrer නැති නිසා අසාර්ථක වේ — key එක");
+      lines.push("    \"None\" (no restrictions) වලට සකසන්න), හෝ");
+      lines.push("  • Generative Language API එක ඒ Google Cloud project එකේ enable කර නැත.");
+    }
+    aiTestReport = lines.join("\n");
+    try { localStorage.setItem("hs_sec_aitest", aiTestReport); } catch (_) {}
+    btn.disabled = false;
+    paint(aiTestReport);
+    toast(result && !result.error ? "Gemini සැබෑවම වැඩ කරනවා ✓" : "Gemini අසාර්ථකයි — විස්තර බලන්න", result && !result.error ? "ok" : "err");
   };
 
   /* Re-derives guestsPublic/{id} = {name, family, side} for every guests/{id}

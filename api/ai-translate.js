@@ -153,6 +153,13 @@ module.exports = async function handler(req, res) {
     const parsed = parseGeminiJson(raw);
     res.status(200).json({ ok: true, translation: parsed.translation, confidence: parsed.confidence, note: parsed.note });
   } catch (e) {
+    /* Logged server-side (visible in Vercel's runtime logs), not just
+       returned in the response -- the FIRST reported failure of this
+       endpoint showed only a generic "අසාර්ථකයි" in the admin UI with no
+       way to tell what actually went wrong (bad model name, a restricted
+       API key, a safety-filter block, etc. all look identical from the
+       client's side otherwise). */
+    console.error("ai-translate failed:", e && e.stack ? e.stack : e);
     res.status(502).json({ error: "Translation service unreachable or failed: " + (e && e.message ? e.message : String(e)) });
   }
 };

@@ -469,6 +469,10 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity
    admin takes on demand, not passive auto-fill, so it gets its own row. */
 .ai-tri-row{ display:flex; align-items:center; gap:12px; margin:-6px 0 14px; flex-wrap:wrap; }
 .ai-tri-status{ font-size:.8rem; color:var(--mut); }
+/* The master "translate everything" button's label is long -- .btn's
+   white-space:nowrap otherwise forces it (and the whole flex row) wider
+   than a narrow phone viewport, causing horizontal page overflow. */
+#translateAllBtn{ white-space:normal; text-align:center; max-width:100%; }
 .saved{ font-size:.8rem; color:var(--ok); font-weight:700; opacity:0; transform:translateX(-6px); transition:.35s var(--ease); }
 .saved.show{ opacity:1; transform:none; }
 
@@ -523,6 +527,28 @@ input[type=datetime-local].inp::-webkit-calendar-picker-indicator:hover{ opacity
   border:1px solid var(--line-soft); color:var(--ink); font-size:.82rem; max-width:100%;
 }
 .mini:focus{ outline:0; border-color:var(--gold-2); box-shadow:0 0 0 2px rgba(232,201,135,.18); }
+/* Replaces <input type=number class="mini"> for the guest-count/table-number
+   table columns -- same white-box-at-rest Safari bug already fixed for
+   .inp/.txt-wrap fields, but .mini never got that fix (different class,
+   never touched). Rather than repeat the opacity:0-native-input-plus-
+   overlay workaround again, this sidesteps native number-input rendering
+   entirely: no <input> at all, just a plain styled value with +/- buttons
+   -- nothing here for a browser to paint its own colors onto, and a nicer
+   control than a bare number field for a value only ever nudged by a
+   handful of guests/tables at a time anyway. */
+.mini-stepper{
+  display:inline-flex; align-items:center; gap:2px; border-radius:9px;
+  background:rgba(255,255,255,.05); border:1px solid var(--line-soft);
+  padding:2px; user-select:none;
+}
+.mini-step-btn{
+  width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+  border-radius:7px; border:0; background:transparent; color:var(--gold-2);
+  font-size:.95rem; font-weight:700; line-height:1; cursor:pointer; transition:.16s var(--ease);
+}
+.mini-step-btn:hover{ background:rgba(232,201,135,.14); color:var(--gold-bright); }
+.mini-step-btn:active{ transform:scale(.9); }
+.mini-step-val{ min-width:1.6em; text-align:center; color:var(--ink); font-size:.82rem; font-variant-numeric:tabular-nums; }
 .pager{ display:flex; align-items:center; justify-content:center; gap:10px; margin-top:14px; font-size:.84rem; color:var(--mut); }
 
 /* ── list rows ── */
