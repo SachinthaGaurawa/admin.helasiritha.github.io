@@ -1533,7 +1533,7 @@ async function aiTranslate(text, fromLang, toLang, fieldContext) {
     let j = null; try { j = await r.json(); } catch (_) {}
     if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status), quotaExceeded: !!(j && j.quotaExceeded) };
     if (!j || !j.ok) return { error: "unexpected response shape" };
-    return { translation: j.translation, confidence: j.confidence, note: j.note, model: j.model };
+    return { translation: j.translation, confidence: j.confidence, riskFactors: j.riskFactors || {}, note: j.note, model: j.model };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
 }
 /* Cross-checks the THREE already-saved language versions of one field
@@ -1555,7 +1555,7 @@ async function aiAuditTrio(si, en, ta, fieldContext) {
     if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status), quotaExceeded: !!(j && j.quotaExceeded) };
     if (!j || !j.ok) return { error: "unexpected response shape" };
     return {
-      consistent: j.consistent, severity: j.severity, confidence: j.confidence,
+      consistent: j.consistent, severity: j.severity, confidence: j.confidence, riskFactors: j.riskFactors || {},
       issue: j.issue, suggestion: j.suggestion, corrections: j.corrections || {}, model: j.model,
     };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
@@ -1616,6 +1616,32 @@ function applyAuditFix(finding) {
    something to translate, false if the trio was empty (so the master
    button can silently skip empty trios instead of erroring on every one
    the admin hasn't gotten to yet). */
+/* Human-readable labels for the server's confidence-calibration risk
+   factors (see api/ai-translate.js's deriveConfidence()/buildPrompt()) --
+   turns a bare "medium confidence" into an actual reason the admin can
+   act on, instead of a number they have to trust blindly. */
+const RISK_FACTOR_LABELS = {
+  ambiguousSource: "මූලාශ්‍ර පෙළෙහි එකකට වඩා අර්ථයක් තිබිය හැක",
+  idiomatic: "පරිවර්තනය කළ නොහැකි කියමනක්/ව්‍යවහාරයක්",
+  registerRisk: "විධිමත් භාවය/ගෞරව මට්ටම හරියටම ගැලපෙනවාදැයි සැකයක්",
+  properNounRisk: "නමක් හෝ ස්ථානයක් නිවැරදිව අක්ෂර වින්‍යාසය කළාදැයි සැකයක්",
+};
+/* Same idea, audit mode's own three self-reported factors plus the
+   server-computed partialCoverage (see deriveConfidence()'s comment,
+   api/ai-translate.js) -- distinct key set from RISK_FACTOR_LABELS above
+   since audit mode is judging an existing finding, not producing a fresh
+   translation. */
+const AUDIT_RISK_FACTOR_LABELS = {
+  ambiguousFinding: "මෙය ඇත්තටම වැරැද්දක්ද නැත්නම් හිතාමතාම කළ වෙනසක්ද යන්න පැහැදිලි නැත",
+  vagueContext: "මේ field එකට අවශ්‍ය ස්වරය/ආකෘතිය හරියටම නොපැහැදිලියි",
+  properNounUncertainty: "නමක් හෝ ස්ථානයක් නිවැරදිව අක්ෂර වින්‍යාසය කළාදැයි සැකයක්",
+  partialCoverage: "භාෂා තුනම (comparison සඳහා) ලබා දී නොතිබුණි",
+};
+function riskFactorSummary(riskFactors, labels) {
+  const map = labels || RISK_FACTOR_LABELS;
+  const flagged = Object.keys(riskFactors || {}).filter((k) => riskFactors[k]);
+  return flagged.map((k) => map[k] || k).join(" · ");
+}
 async function runAiTrio(els, fieldContext, status, btn) {
   const entries = Object.entries(els).filter(([, el]) => el.value.trim());
   if (!entries.length) return false;
@@ -1635,8 +1661,10 @@ async function runAiTrio(els, fieldContext, status, btn) {
       const el = els[toLang];
       el.value = r.translation;
       el.dataset.lastEdited = "0"; // AI-written just now, not hand-edited -- a later click may still overwrite it
-      if (r.confidence !== "high") el.title = "AI (" + r.confidence + " confidence)" + (r.note ? " — " + r.note : "");
-      else el.removeAttribute("title");
+      if (r.confidence !== "high") {
+        const why = riskFactorSummary(r.riskFactors);
+        el.title = "AI (" + r.confidence + " confidence)" + (why ? " — " + why : "") + (r.note ? " — " + r.note : "");
+      } else el.removeAttribute("title");
       if (r.confidence === "low" || (r.confidence === "medium" && worst === "high")) worst = r.confidence;
     });
     syncTxtDisplays(); // .value set directly above never fires "input" -- repaint the txt-display overlays
@@ -2062,7 +2090,7 @@ renderers.details = function () {
       if (!r.consistent && r.severity !== "none") {
         const hasCorrections = r.corrections && Object.values(r.corrections).some((c) => c && c.trim());
         findings.push({
-          label: t.label, severity: r.severity, confidence: r.confidence || "medium",
+          label: t.label, severity: r.severity, confidence: r.confidence || "medium", riskFactors: r.riskFactors || {},
           issue: r.issue, suggestion: r.suggestion,
           corrections: hasCorrections ? r.corrections : null,
           applyTarget: hasCorrections ? t.applyTarget : null,
@@ -2079,7 +2107,9 @@ renderers.details = function () {
           '<b style="color:' + (sevColor[f.severity] || "var(--mut)") + '">' + esc(f.label) + ' — ' + (sevLabel[f.severity] || f.severity) + '</b>' +
           '<div>' + esc(f.issue) + '</div>' +
           (f.suggestion ? '<div class="faint">යෝජනාව: ' + esc(f.suggestion) + '</div>' : '') +
-          (f.confidence ? '<div class="faint" style="font-size:.76rem">AI විශ්වාසය: ' + (confLabel[f.confidence] || f.confidence) + '</div>' : '') +
+          (f.confidence ? '<div class="faint" style="font-size:.76rem">AI විශ්වාසය: ' + (confLabel[f.confidence] || f.confidence) +
+            (f.confidence !== "high" && riskFactorSummary(f.riskFactors, AUDIT_RISK_FACTOR_LABELS) ? ' — ' + esc(riskFactorSummary(f.riskFactors, AUDIT_RISK_FACTOR_LABELS)) : "") +
+            '</div>' : '') +
           (f.applyTarget ?
             '<div class="row" style="margin-top:2px"><button class="btn xs primary audit-fix-btn" data-idx="' + i + '" type="button">✨ AI මගින් නිවැරදි කරන්න</button></div>'
             : '') +
