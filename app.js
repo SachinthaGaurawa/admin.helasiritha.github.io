@@ -2420,15 +2420,28 @@ renderers.rsvp = function () {
         '<button class="btn sm ghost" id="rCsv" type="button" style="margin-inline-start:auto">CSV බාගන්න</button></div>' +
       (slice.length
         ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>තත්ත්වය</th><th>සංඛ්‍යාව</th><th>ක්‍රියා</th></tr></thead><tbody>' +
-          slice.map(g =>
-            '<tr><td>' + esc(g.name) + '</td><td>' + esc(g.family) + '</td>' +
+          slice.map(g => {
+            /* The status pill (read-only, "what IS their answer") and these
+               two action buttons (write, "set their answer to...") used to
+               render with the IDENTICAL two words ("තහවුරු"/"නොපැමිණේ")
+               both always visible regardless of the guest's actual current
+               status -- reported directly as genuinely hard to tell, from
+               the row alone, whether a guest who just RSVP'd online was a
+               yes or a no, since both action buttons always looked equally
+               "live". Now only ONE of the two ever carries the solid
+               ok/bad color + a ✓ mark -- whichever matches g.status -- and
+               the other renders as a muted outline, so the row has exactly
+               one unambiguous answer, not two competing-looking ones. */
+            const yesIsCurrent = g.status === "confirmed", noIsCurrent = g.status === "declined";
+            return '<tr><td>' + esc(g.name) + '</td><td>' + esc(g.family) + '</td>' +
             '<td><span class="pill side">' + esc(sideName(g.side)) + '</span></td>' +
             '<td>' + statusPill(g.status) + '</td>' +
             '<td class="num">' + (g.party || g.count) + '</td>' +
-            '<td><button class="btn xs ok r-yes" data-id="' + g.id + '" type="button">තහවුරු</button> ' +
-            '<button class="btn xs bad r-no" data-id="' + g.id + '" type="button">නොපැමිණේ</button>' +
+            '<td><button class="btn xs ' + (yesIsCurrent ? "ok" : "ghost") + ' r-yes" data-id="' + g.id + '" type="button">' + (yesIsCurrent ? "✓ " : "") + 'තහවුරු</button> ' +
+            '<button class="btn xs ' + (noIsCurrent ? "bad" : "ghost") + ' r-no" data-id="' + g.id + '" type="button">' + (noIsCurrent ? "✓ " : "") + 'නොපැමිණේ</button>' +
             (g.hasRsvp ? ' <button class="btn xs ghost r-clr" data-id="' + g.id + '" type="button">හිස් කරන්න</button>' : '') +
-            '</td></tr>').join("") +
+            '</td></tr>';
+          }).join("") +
           '</tbody></table></div>' +
           '<div class="pager"><button class="btn xs ghost" id="rPrev" type="button"' + (rFilter.page <= 1 ? " disabled" : "") + '>← පෙර</button>' +
           '<span>පිටුව ' + rFilter.page + ' / ' + pages + ' · මුළු ' + list.length + '</span>' +

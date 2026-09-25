@@ -164,16 +164,42 @@ async function callGeminiOnce(model, promptText, apiKey) {
   return raw;
 }
 
+/* Status codes worth retrying: Gemini's own free/shared capacity pool
+   returns 503 "currently experiencing high demand" fairly routinely at
+   busy times -- Google's own error text literally says "try again later",
+   so failing outright on the very first 503 and making the admin manually
+   re-click is leaving an easy, honest recovery on the table. 429 (rate
+   limit) and 500/502/504 (transient upstream trouble) get the same
+   treatment. 400/401/403 do NOT retry -- a malformed request or a bad/
+   restricted key fails identically every time, so retrying just delays
+   the real, actionable error for no benefit. Kept short (well under a
+   typical serverless function's timeout budget) since this runs inline
+   in the request the admin is actively waiting on. */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [400, 1000];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function callGeminiWithFallback(promptText, apiKey) {
   let lastErr;
   for (const model of GEMINI_MODEL_CANDIDATES) {
-    try {
-      const raw = await callGeminiOnce(model, promptText, apiKey);
-      return { raw, model };
-    } catch (e) {
-      lastErr = e;
-      if (e.status !== 404) throw e;
-      console.error("ai-translate: " + model + " unavailable (404), trying next candidate");
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        const raw = await callGeminiOnce(model, promptText, apiKey);
+        return { raw, model };
+      } catch (e) {
+        lastErr = e;
+        if (e.status !== 404 && !RETRYABLE_STATUS.has(e.status)) throw e;
+        const isLastAttempt = attempt === RETRY_DELAYS_MS.length;
+        if (e.status === 404 || isLastAttempt) {
+          console.error("ai-translate: " + model + " " +
+            (e.status === 404 ? "unavailable (404)" : "still failing after retries (" + e.status + ")") +
+            " -- trying next candidate");
+          break;
+        }
+        console.error("ai-translate: " + model + " returned " + e.status + " (attempt " + (attempt + 1) +
+          "/" + (RETRY_DELAYS_MS.length + 1) + "), retrying in " + RETRY_DELAYS_MS[attempt] + "ms");
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
     }
   }
   throw lastErr;
