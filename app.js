@@ -1552,10 +1552,54 @@ async function aiAuditTrio(si, en, ta, fieldContext) {
       body: JSON.stringify({ mode: "audit", si, en, ta, fieldContext })
     });
     let j = null; try { j = await r.json(); } catch (_) {}
-    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
+    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status), quotaExceeded: !!(j && j.quotaExceeded) };
     if (!j || !j.ok) return { error: "unexpected response shape" };
-    return { consistent: j.consistent, severity: j.severity, issue: j.issue, suggestion: j.suggestion, model: j.model };
+    return {
+      consistent: j.consistent, severity: j.severity, confidence: j.confidence,
+      issue: j.issue, suggestion: j.suggestion, corrections: j.corrections || {}, model: j.model,
+    };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
+}
+/* Applies one audit finding's AI-proposed corrections directly to the field
+   they came from -- the "AI මගින් නිවැරදි කරන්න" button in the #auditAllBtn
+   report below. Only ever writes a language the AI actually flagged as
+   needing a change (an empty string in corrections means "this one was
+   already right", left untouched); never writes anything the admin hasn't
+   asked for via that click, and never saves on its own -- it only updates
+   the field's current value, same as typing into it would, so the admin's
+   own Save button is still what actually persists it. Works for a details-
+   panel trio (only ever called while that panel is on screen, since that's
+   also where the finding's si/en/ta were read from to run the audit) and
+   for an agenda item (updates the in-memory `agenda` array either way, and
+   also refreshes the on-screen inputs via drawAgenda() if the agenda panel
+   happens to be the one currently rendered). */
+function applyAuditFix(finding) {
+  const target = finding && finding.applyTarget;
+  const corrections = finding && finding.corrections;
+  if (!target || !corrections) return false;
+  let applied = false;
+  if (target.kind === "trio") {
+    const ids = { si: target.base + "Si_", en: target.base + "En_", ta: target.base + "Ta_" };
+    for (const l of ["si", "en", "ta"]) {
+      const val = corrections[l];
+      if (!val) continue;
+      const el = document.getElementById(ids[l]);
+      if (el) { el.value = val; applied = true; }
+    }
+  } else if (target.kind === "agenda") {
+    const it = agenda[target.index];
+    if (!it) return false;
+    const suffix = { si: "Si", en: "En", ta: "Ta" };
+    const prefix = target.field === "title" ? "title" : "desc";
+    for (const l of ["si", "en", "ta"]) {
+      const val = corrections[l];
+      if (!val) continue;
+      it[prefix + suffix[l]] = val;
+      applied = true;
+    }
+    if (applied && document.getElementById("agList")) drawAgenda();
+  }
+  return applied;
 }
 /* Unlike wireNameTrio() (automatic, debounced, fires on every keystroke --
    fine for a fast free phonetic lookup), this is a single explicit button
@@ -1923,6 +1967,19 @@ renderers.details = function () {
     ["cue", "ai", "A short closing/prompt line at the end of a wedding invitation scroll"],
     ["loveNote", "ai", "A warm, heartfelt thank-you message from the couple to their wedding guests, for a formal wedding invitation website"],
   ];
+  /* Human-readable field names for the audit report (#auditAllBtn below) --
+     without this, a finding would just show the raw internal key ("join",
+     "cue"), which means nothing to the admin at a glance. */
+  const FIELD_LABELS = {
+    brideName: "මනාලියගේ නම", groomName: "මනාලයාගේ නම",
+    brideFather: "මනාලියගේ පියාගේ නම", groomFather: "මනාලයාගේ පියාගේ නම",
+    venue: "ස්ථානයේ නම", venueCity: "නගරය",
+    brideParents: "මනාලියගේ හැඳින්වීමේ වාක්‍ය ඛණ්ඩය", groomParents: "මනාලයාගේ හැඳින්වීමේ වාක්‍ය ඛණ්ඩය",
+    ceremonyTime: "උත්සව වේලාව", join: "එක්වීමේ පේළිය", sannasaBody: "ආරාධනා ඡේදය",
+    poruwa: "පෝරු මුහුර්ත පේළිය", sri: "ශ්‍රී ලකුණ", eyebrow: "ශීර්ෂ පේළිය",
+    lDate: "'දිනය' ලේබලය", lTime: "'වේලාව' ලේබලය", lVenue: "'ස්ථානය' ලේබලය",
+    cue: "අවසාන ඉඟි පේළිය", loveNote: "ආදර සටහන (Love Note)",
+  };
   ["brideName", "groomName", "brideFather", "groomFather", "venue", "venueCity"].forEach(base =>
     wireNameTrio({ si: base + "Si_", en: base + "En_", ta: base + "Ta_" }));
   DETAILS_TRIOS.forEach(([base, engine, ctx]) =>
@@ -1957,19 +2014,32 @@ renderers.details = function () {
      proofreading pass over content that's already there, not a
      translation step, so it reads directly from the loaded content/agenda
      rather than requiring a fresh save first. Sequential for the same
-     rate-limit reason as translateAllBtn above. */
+     rate-limit reason as translateAllBtn above.
+
+     Each finding also carries an applyTarget (which field/agenda-entry it
+     came from) so the "AI මගින් නිවැරදි කරන්න" button below can write the
+     model's proposed corrected text straight back into the actual field --
+     the admin no longer has to retype a fix by hand from a text
+     description, just review it and click Save as usual. Nothing here
+     auto-saves: applying a fix only updates the on-page field (or, for an
+     agenda item not currently visible, the in-memory agenda array), same
+     as typing into it directly would -- the admin's own Save button is
+     still the only thing that persists it, exactly like every other
+     AI-generated value in this admin panel. */
   $("#auditAllBtn").onclick = async () => {
     const btn = $("#auditAllBtn"), status = $("#auditAllStatus");
     const reportWrap = $("#auditReportWrap"), report = $("#auditReport");
     btn.disabled = true;
     reportWrap.hidden = true;
     const targets = DETAILS_TRIOS.map(([base, , ctx]) => ({
-      label: base, ctx,
+      label: FIELD_LABELS[base] || base, ctx, applyTarget: { kind: "trio", base },
       si: v(base + "Si_"), en: v(base + "En_"), ta: v(base + "Ta_"),
     })).concat(agenda.flatMap((it, i) => ([
       { label: "වැඩසටහන #" + (i + 1) + " · මාතෘකාව", ctx: "An agenda-item title for a wedding ceremony program/timeline",
+        applyTarget: { kind: "agenda", index: i, field: "title" },
         si: it.titleSi || "", en: it.titleEn || "", ta: it.titleTa || "" },
       { label: "වැඩසටහන #" + (i + 1) + " · විස්තරය", ctx: "A short description of a wedding ceremony agenda item",
+        applyTarget: { kind: "agenda", index: i, field: "desc" },
         si: it.descSi || "", en: it.descEn || "", ta: it.descTa || "" },
     ])));
 
@@ -1978,29 +2048,62 @@ renderers.details = function () {
     for (const t of targets) {
       const filled = [t.si, t.en, t.ta].filter((s) => s.trim()).length;
       if (filled < 2) { skipped++; continue; }
-      status.textContent = "🔍 (" + (checked + skipped + 1) + "/" + targets.length + ") " + t.label + " පරීක්ෂා වෙමින්...";
+      status.textContent = "🔍 (" + (checked + skipped + 1) + "/" + targets.length + ") " + t.label + " ගැඹුරින් පරීක්ෂා වෙමින්...";
       const r = await aiAuditTrio(t.si, t.en, t.ta, t.ctx);
       checked++;
-      if (r.error) { findings.push({ label: t.label, severity: "error", issue: r.error, suggestion: "" }); continue; }
-      if (!r.consistent && r.severity !== "none") findings.push({ label: t.label, severity: r.severity, issue: r.issue, suggestion: r.suggestion });
+      if (r.error) {
+        findings.push({
+          label: t.label, severity: "error",
+          issue: r.quotaExceeded ? "Gemini quota එක ඉවරයි — ටිකක් ඉඳලා නැවත 'ගුණාත්මක පරීක්ෂණය' run කරන්න." : r.error,
+          suggestion: "", corrections: null, applyTarget: null,
+        });
+        continue;
+      }
+      if (!r.consistent && r.severity !== "none") {
+        const hasCorrections = r.corrections && Object.values(r.corrections).some((c) => c && c.trim());
+        findings.push({
+          label: t.label, severity: r.severity, confidence: r.confidence || "medium",
+          issue: r.issue, suggestion: r.suggestion,
+          corrections: hasCorrections ? r.corrections : null,
+          applyTarget: hasCorrections ? t.applyTarget : null,
+        });
+      }
     }
 
     const sevColor = { high: "var(--bad)", medium: "var(--warn)", low: "var(--mut)", error: "var(--bad)" };
     const sevLabel = { high: "බරපතල අසමගියක්", medium: "මධ්‍යම මට්ටමේ අසමගියක්", low: "සුළු අසමගියක්", error: "පරීක්ෂා කළ නොහැකි විය" };
+    const confLabel = { high: "විශ්වාසදායකයි", medium: "මධ්‍යම විශ්වාසයක්", low: "අවිනිශ්චිතයි" };
     if (findings.length) {
-      report.innerHTML = findings.map((f) =>
+      report.innerHTML = findings.map((f, i) =>
         '<div class="item" style="flex-direction:column;align-items:stretch;gap:4px;padding-inline-start:12px;border-inline-start:3px solid ' + (sevColor[f.severity] || "var(--mut)") + '">' +
           '<b style="color:' + (sevColor[f.severity] || "var(--mut)") + '">' + esc(f.label) + ' — ' + (sevLabel[f.severity] || f.severity) + '</b>' +
           '<div>' + esc(f.issue) + '</div>' +
           (f.suggestion ? '<div class="faint">යෝජනාව: ' + esc(f.suggestion) + '</div>' : '') +
+          (f.confidence ? '<div class="faint" style="font-size:.76rem">AI විශ්වාසය: ' + (confLabel[f.confidence] || f.confidence) + '</div>' : '') +
+          (f.applyTarget ?
+            '<div class="row" style="margin-top:2px"><button class="btn xs primary audit-fix-btn" data-idx="' + i + '" type="button">✨ AI මගින් නිවැරදි කරන්න</button></div>'
+            : '') +
         '</div>'
       ).join("");
       reportWrap.hidden = false;
+      $$(".audit-fix-btn", report).forEach((fixBtn) => {
+        fixBtn.onclick = () => {
+          const f = findings[+fixBtn.dataset.idx];
+          const applied = applyAuditFix(f);
+          if (applied) {
+            fixBtn.disabled = true;
+            fixBtn.textContent = "✓ යෙදුවා — දැන් Save කරන්න";
+            fixBtn.classList.remove("primary"); fixBtn.classList.add("ghost");
+          } else {
+            toast("මේ field එක දැනට පිටුවේ නැත", "warn");
+          }
+        };
+      });
     } else {
       reportWrap.hidden = true;
     }
     status.innerHTML = '<span style="color:' + (findings.length ? "var(--warn)" : "var(--ok)") + '">' +
-      (findings.length ? "⚠ ගැටළු " + findings.length + "ක් හමු විය — පහත වාර්තාව බලන්න" : "✓ ගැටළු හමු නොවීය — සියල්ල එකිනෙකට ගැලපේ") +
+      (findings.length ? "⚠ ගැටළු " + findings.length + "ක් හමු විය — පහත වාර්තාව බලන්න" : "✓ ගැඹුරු පරීක්ෂණයෙන් ගැටළු හමු නොවීය — සියල්ල එකිනෙකට ගැලපී, තුනම භාෂාවෙන්ම නිවැරදිව පෙනේ") +
       ' · fields ' + checked + 'ක් පරීක්ෂා කළා' + (skipped ? ' · ' + skipped + 'ක් මඟහැරිණි (භාෂා 2කටවත් අඩුවෙන් පෙළ තිබූ නිසා)' : '') + '</span>';
     btn.disabled = false;
   };

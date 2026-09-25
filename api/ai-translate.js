@@ -130,40 +130,86 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
    This mode is that missing check: given the THREE already-saved values
    for one field, ask whether they still actually say the same thing, and
    report the specific mismatch if they don't -- a proofreading pass over
-   existing content, not a translation of new content. */
+   existing content, not a translation of new content.
+
+   Deepened after an explicit request to push this as far as it can honestly
+   go: beyond the original three checks (meaning/fact mismatch, missing
+   content, name-spelling drift), this now also checks EACH language
+   version's own internal correctness (grammar/natural phrasing can be
+   wrong even when all three versions technically "agree" with each
+   other), formal-register/honorific consistency appropriate for a wedding
+   invitation, and numeral/date/time VALUE consistency (not just that a
+   number is present, but that "9.00 a.m." and its Sinhala/Tamil versions
+   name the SAME time). It also now asks the model to propose the actual
+   corrected text per language (not just describe the problem in prose),
+   so the admin can apply a fix in one click instead of retyping it by
+   hand -- see the "corrections" field below, and the #auditReport "මෙය AI
+   මගින් නිවැරදි කරන්න" button in app.js that applies it. */
 function buildAuditPrompt(langValues, fieldContext) {
   const lines = Object.keys(langValues)
     .filter((l) => langValues[l])
     .map((l) => LANG_NAMES[l] + ": " + langValues[l])
     .join("\n");
+  const presentLangs = Object.keys(langValues).filter((l) => langValues[l]);
   return (
-    "You are proofreading the three language versions of ONE field of a formal wedding " +
-    "invitation, checking whether they are still faithful equivalents of each other.\n" +
+    "You are a meticulous professional proofreader and translator reviewing the language " +
+    "versions of ONE field of a formal Sri Lankan wedding invitation, checking whether they " +
+    "are faithful, natural, and internally correct equivalents of each other.\n" +
     "Context for this field: " + (fieldContext || "a wedding invitation field") + "\n\n" +
     lines + "\n\n" +
-    "Check specifically for: (1) a difference in MEANING or factual content between the " +
-    "versions (a name, date, number, place, or relationship -- e.g. \"father\" vs \"parents\" -- " +
-    "that doesn't match across all versions present); (2) a version that is missing content the " +
-    "others have; (3) a proper noun (a person or place name) that is not phonetically the same " +
-    "across versions. Do NOT flag natural differences in sentence structure, word order, or " +
-    "formality register between languages -- those are expected and correct, not mistakes.\n\n" +
+    "Check thoroughly for ALL of the following, in order of importance:\n" +
+    "1. MEANING/FACTUAL mismatch: a name, date, number, place, or relationship (e.g. \"father\" " +
+    "vs \"parents\") that doesn't match across all versions present.\n" +
+    "2. MISSING CONTENT: a version that omits content the others have.\n" +
+    "3. NUMERAL/DATE/TIME VALUE mismatch: e.g. one version says a different clock time, date, " +
+    "or count than the others, even if the wording otherwise looks similar.\n" +
+    "4. PROPER-NOUN phonetic drift: a person or place name that is not phonetically the same " +
+    "across versions.\n" +
+    "5. INTERNAL correctness: does EACH version, read on its own, use grammatically correct, " +
+    "natural, formal phrasing in ITS language -- independent of whether it happens to agree " +
+    "with the others? (A version can be internally broken even if it technically matches the " +
+    "others in meaning.)\n" +
+    "6. REGISTER/HONORIFIC consistency: is the level of formality and any honorifics " +
+    "(Mr./Mrs., ආදරණීය, திரு/திருமதி etc.) consistent with a formal wedding invitation across " +
+    "all versions present?\n" +
+    "Do NOT flag natural differences in sentence structure or word order between languages -- " +
+    "those are expected and correct, not mistakes.\n\n" +
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
-    '{"consistent":true|false,"severity":"none|low|medium|high","issue":"...","suggestion":"..."}\n' +
-    "consistent=true and severity=\"none\" with empty issue/suggestion if the versions genuinely " +
-    "match; otherwise describe the SPECIFIC mismatch in \"issue\" (one sentence) and propose a " +
-    "concrete fix in \"suggestion\" (one sentence)."
+    '{"consistent":true|false,"severity":"none|low|medium|high","confidence":"high|medium|low",' +
+    '"issue":"...","suggestion":"...","corrections":{' +
+    presentLangs.map((l) => '"' + l + '":"..."').join(",") +
+    "}}\n" +
+    "consistent=true, severity=\"none\", confidence=\"high\" with empty issue/suggestion and every " +
+    "corrections value set to an empty string \"\" if every version genuinely matches and is " +
+    "internally correct. Otherwise describe the SPECIFIC problem in \"issue\" (one sentence), a " +
+    "human-readable fix in \"suggestion\" (one sentence), and in \"corrections\" give the FULL " +
+    "corrected text (not a diff, not a description -- the complete replacement text ready to " +
+    "paste in) for EVERY language you listed above that needs a change to fix this specific " +
+    "problem, using the language(s) you judge correct as the source of truth; leave any " +
+    "language that is already correct as an empty string \"\" in corrections (do not rewrite " +
+    "text that isn't wrong). Set confidence=\"low\" only if you are genuinely unsure whether " +
+    "something is actually a mistake (e.g. a stylistic choice that might be intentional)."
   );
 }
 
-function parseAuditJson(raw) {
+function parseAuditJson(raw, presentLangs) {
   const cleaned = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const j = JSON.parse(cleaned);
   const severity = ["none", "low", "medium", "high"].includes(j.severity) ? j.severity : (j.consistent ? "none" : "medium");
+  const confidence = ["high", "medium", "low"].includes(j.confidence) ? j.confidence : "medium";
+  const rawCorrections = (j.corrections && typeof j.corrections === "object") ? j.corrections : {};
+  const corrections = {};
+  for (const l of presentLangs || []) {
+    const c = rawCorrections[l];
+    corrections[l] = typeof c === "string" ? c.trim().slice(0, 2000) : "";
+  }
   return {
     consistent: j.consistent === true,
     severity,
+    confidence,
     issue: typeof j.issue === "string" ? j.issue : "",
     suggestion: typeof j.suggestion === "string" ? j.suggestion : "",
+    corrections,
   };
 }
 
@@ -325,13 +371,16 @@ module.exports = async function handler(req, res) {
     };
     const filled = Object.keys(langValues).filter((l) => langValues[l]);
     if (filled.length < 2) {
-      res.status(200).json({ ok: true, consistent: true, severity: "none", issue: "", suggestion: "" });
+      res.status(200).json({ ok: true, consistent: true, severity: "none", confidence: "high", issue: "", suggestion: "", corrections: {} });
       return;
     }
     try {
       const { raw, model } = await callGeminiWithFallback(buildAuditPrompt(langValues, fieldContext), GEMINI_KEY);
-      const parsed = parseAuditJson(raw);
-      res.status(200).json({ ok: true, consistent: parsed.consistent, severity: parsed.severity, issue: parsed.issue, suggestion: parsed.suggestion, model });
+      const parsed = parseAuditJson(raw, filled);
+      res.status(200).json({
+        ok: true, consistent: parsed.consistent, severity: parsed.severity, confidence: parsed.confidence,
+        issue: parsed.issue, suggestion: parsed.suggestion, corrections: parsed.corrections, model,
+      });
     } catch (e) {
       console.error("ai-translate audit failed:", e && e.stack ? e.stack : e);
       const { message, quotaExceeded } = describeGeminiError(e);
