@@ -47,39 +47,46 @@
 
 const ADMIN_EMAIL = "gaurawasachintha@gmail.com";
 /* Confirmed against real production runtime logs (Vercel -> this function's
-   own console.error trail), not another guess: the failures today are NOT
-   about a wrong/dead model name anymore. gemini-pro-latest and
-   gemini-flash-latest are BOTH correctly recognized -- they fail with
-   Gemini's own "You exceeded your current quota, please check your plan
-   and billing details" (429) and "currently experiencing high demand"
-   (503). That is Google's free/shared-tier request-rate ceiling for this
-   specific API key being hit, not a bug in this file. gemini-2.5-pro and
-   gemini-2.5-flash looked like safe established fallbacks (ListModels
-   lists both) but actually 404 with "no longer available to NEW USERS" --
-   this Google Cloud project is too recent to have grandfathered access to
-   that generation at all, so they can never succeed and were pure wasted
-   calls burning MORE of the same limited quota.
+   own console.error trail), not another guess: the failures are NOT about
+   a wrong/dead model name. gemini-2.5-pro and gemini-2.5-flash looked like
+   safe established fallbacks (ListModels lists both) but actually 404 with
+   "no longer available to NEW USERS" -- this Google Cloud project is too
+   recent to have grandfathered access to that generation at all, so they
+   can never succeed and were pure wasted calls burning more of the same
+   limited quota. Dropped entirely.
 
-   Ordered by which tier Google's free plans typically grant the MOST
-   requests-per-minute to, cheapest/highest-quota first: flash, then
-   flash-lite (the cheapest tier of all, so the most likely to still have
-   room when pro/flash are throttled), then pro last -- pro-tier free
-   quotas are usually the smallest, so it is now the fallback instead of
-   the first attempt; the earlier "pro first for accuracy" choice was
-   right about quality but wrong about reliability once the account is
-   this rate-limited. Falls through to the next candidate on a 404 (name
-   genuinely gone/inaccessible to this account) or once a model's own
-   retries (see RETRYABLE_STATUS below) are exhausted -- never on an
+   Ordering below was corrected AGAIN after watching a live burst of admin
+   clicks in these same logs: gemini-flash-latest (plain flash, not lite)
+   failed on every single one of 11 back-to-back requests -- first 503
+   "high demand", then, once its own per-minute bucket was hit, 429 "quota
+   exceeded" -- while gemini-flash-lite-latest succeeded on every one of
+   those same requests, no retry needed. That is the opposite of what an
+   earlier version of this comment assumed ("flash has the most quota,
+   pro the least"): in practice Google's free tier grants the LITE tier
+   the most requests-per-minute of the three, since it is the cheapest to
+   serve -- plain flash sits in the middle, and pro is the most
+   quota-constrained. Putting flash-latest first meant EVERY admin click
+   (translate button, "Translate All", the audit feature, the Security
+   panel's real-Gemini-test button) paid a wasted 600ms-4s round trip
+   against a model that was, in practice, already exhausted, before
+   falling through to the one that actually answers. Reordered by that
+   observed reliability, most-generous-quota first: flash-lite, then
+   flash, then pro last (still the best QUALITY tier, but also the
+   smallest quota, so now purely a fallback rather than something tried on
+   every single request). Falls through to the next candidate on a 404
+   (name genuinely gone/inaccessible to this account) or once a model's
+   own retries (see RETRYABLE_STATUS below) are exhausted -- never on an
    unrelated failure (bad key, safety-filter block), since those fail
    identically everywhere and retrying would just multiply wasted calls.
 
-   IMPORTANT, and outside what any model-list reshuffle can fix: if EVERY
+   IMPORTANT, and outside what any model-list reorder can fix: if EVERY
    candidate here is still 429ing, that is the account's actual quota
-   window (per-minute or per-day) being exhausted, and no amount of
-   retrying inside one request changes that -- see Google AI Studio's
-   quota/billing page for this key; enabling pay-as-you-go billing raises
-   these limits substantially over the free tier. */
-const GEMINI_MODEL_CANDIDATES = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest"];
+   window (per-minute or per-day) being exhausted across all three tiers
+   at once, and no amount of retrying inside one request changes that --
+   see Google AI Studio's quota/billing page for this key; enabling
+   pay-as-you-go billing raises these limits substantially over the free
+   tier. */
+const GEMINI_MODEL_CANDIDATES = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"];
 const LANG_NAMES = { si: "Sinhala", en: "English", ta: "Tamil" };
 
 async function verifyIdToken(idToken, apiKey) {
@@ -193,7 +200,7 @@ async function callGeminiOnce(model, promptText, apiKey) {
    treatment. 400/401/403 do NOT retry -- a malformed request or a bad/
    restricted key fails identically every time, so retrying just delays
    the real, actionable error for no benefit. One retry per model, not
-   several: with four candidates now (see GEMINI_MODEL_CANDIDATES above),
+   several: with three candidates now (see GEMINI_MODEL_CANDIDATES above),
    trying a genuinely DIFFERENT model is a more effective use of time than
    hammering the same overloaded one repeatedly, and keeps the worst-case
    total (every candidate, every retry) well under a typical serverless
