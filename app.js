@@ -1531,7 +1531,7 @@ async function aiTranslate(text, fromLang, toLang, fieldContext) {
       body: JSON.stringify({ text, fromLang, toLang, fieldContext })
     });
     let j = null; try { j = await r.json(); } catch (_) {}
-    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status) };
+    if (!r.ok) return { error: (j && j.error) || ("HTTP " + r.status), quotaExceeded: !!(j && j.quotaExceeded) };
     if (!j || !j.ok) return { error: "unexpected response shape" };
     return { translation: j.translation, confidence: j.confidence, note: j.note, model: j.model };
   } catch (e) { return { error: (e && e.message) || "network error" }; }
@@ -1584,7 +1584,7 @@ async function runAiTrio(els, fieldContext, status, btn) {
   try {
     const results = await Promise.all(targets.map(toLang => aiTranslate(text, srcLang, toLang, fieldContext)));
     const failed = results.find(r => r && r.error);
-    if (failed) throw new Error(failed.error);
+    if (failed) { const err = new Error(failed.error); err.quotaExceeded = failed.quotaExceeded; throw err; }
     let worst = "high";
     targets.forEach((toLang, i) => {
       const r = results[i];
@@ -1608,8 +1608,17 @@ async function runAiTrio(els, fieldContext, status, btn) {
        behind a title attribute). Full detail is always in Vercel's
        server logs regardless. */
     const reason = ((e && e.message) || "").slice(0, 160);
-    status.innerHTML = '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න' +
-      (reason ? '<br><span style="font-size:.76rem;opacity:.85">' + esc(reason) + '</span>' : '') + '</span>';
+    /* A quota-exhaustion failure gets its own distinct message -- "try
+       again" is actively misleading here, since a retry inside the same
+       request already happened server-side and didn't help. Google's
+       free-tier quota window (per-minute or per-day) is what needs to
+       pass, not another click. */
+    status.innerHTML = e && e.quotaExceeded
+      ? '<span style="color:var(--bad)">✗ Gemini quota එක අද දිනට/විනාඩියට ඉවරයි — දැන් නැවත try කිරීමෙන් වැඩක් නෑ' +
+        '<br><span style="font-size:.76rem;opacity:.85">' + esc(reason) + '</span>' +
+        '<br><span style="font-size:.76rem;opacity:.85">ටිකක් වේලාවක් ඉඳලා උත්සාහ කරන්න, හෝ Google AI Studio හි මෙම key එකට billing සක්‍රීය කරන්න</span></span>'
+      : '<span style="color:var(--bad)">✗ අසාර්ථකයි — නැවත උත්සාහ කරන්න' +
+        (reason ? '<br><span style="font-size:.76rem;opacity:.85">' + esc(reason) + '</span>' : '') + '</span>';
     return true; // it DID have something to translate, it just failed -- still "handled", not "empty"
   } finally { if (btn) btn.disabled = false; }
 }
@@ -3863,6 +3872,14 @@ renderers.security = function () {
       lines.push("  confidence     : " + result.confidence);
       lines.push("  model          : " + (result.model || "?"));
       lines.push("  ⇒ AI පරිවර්තන feature එක සම්පූර්ණයෙන්ම වැඩ කරනවා.");
+    } else if (result && result.quotaExceeded) {
+      lines.push("✗ Gemini quota එක ඉවරයි (key එකේ ගැටළුවක් නෙවෙයි).");
+      lines.push("  error: " + ((result && result.error) || "unknown"));
+      lines.push("");
+      lines.push("  key එක/model එක නිවැරදියි — Google ම කියන්නේ මේ key එකේ free-tier");
+      lines.push("  request සීමාව (විනාඩියකට හෝ දිනකට) දැනට ඉවර වෙලා කියලයි. විසඳුම්:");
+      lines.push("  • ටිකක් වේලාවක් (විනාඩි කිහිපයක්, හෝ දින සීමාව නම් ඊළඟ දවසේ) ඉඳලා නැවත උත්සාහ කරන්න, හෝ");
+      lines.push("  • Google AI Studio → මෙම API key → billing/plan සක්‍රීය කර සීමාව ඉහළ දමන්න.");
     } else {
       lines.push("✗ Gemini ට request එක අසාර්ථක විය.");
       lines.push("  error: " + ((result && result.error) || "unknown"));

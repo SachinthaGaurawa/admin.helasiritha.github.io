@@ -46,29 +46,40 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 const ADMIN_EMAIL = "gaurawasachintha@gmail.com";
-/* Confirmed against Gemini's own live ListModels API (GET ?probe=models on
-   this same file) after TWO rounds of guessing a specific version number
-   went wrong: "gemini-3.8-pro" flat-out never existed (every request was
-   silently eating a 404 on it before ever reaching a real model), and
-   "gemini-3.8-flash" -- Google's own error text once named it the correct
-   replacement for retired gemini-2.0-flash -- is a genuinely new, heavily
-   hyped release that Google's shared pool keeps rate-limiting (503) under
-   ordinary load, not a broken config.
+/* Confirmed against real production runtime logs (Vercel -> this function's
+   own console.error trail), not another guess: the failures today are NOT
+   about a wrong/dead model name anymore. gemini-pro-latest and
+   gemini-flash-latest are BOTH correctly recognized -- they fail with
+   Gemini's own "You exceeded your current quota, please check your plan
+   and billing details" (429) and "currently experiencing high demand"
+   (503). That is Google's free/shared-tier request-rate ceiling for this
+   specific API key being hit, not a bug in this file. gemini-2.5-pro and
+   gemini-2.5-flash looked like safe established fallbacks (ListModels
+   lists both) but actually 404 with "no longer available to NEW USERS" --
+   this Google Cloud project is too recent to have grandfathered access to
+   that generation at all, so they can never succeed and were pure wasted
+   calls burning MORE of the same limited quota.
 
-   Both problems share one real fix: stop pinning a specific dated version
-   at all. "-latest" is Google's own alias for "whatever the current best
-   model actually is" -- it never 404s when Google ships a new version
-   under the hood, which is the exact failure this file has now hit twice.
-   Tried first (pro, for the higher accuracy the admin's Pro-tier account
-   gives; then flash). The 2.5-generation models are the fallback after
-   that: not brand new, not what everyone is currently hammering, so they
-   are the candidates most likely to have spare capacity on a day the
-   newest release is overloaded. Falls through to the next candidate on a
-   404 (name genuinely gone) or once a model's own retries (see
-   RETRYABLE_STATUS below) are exhausted -- never on an unrelated failure
-   (bad key, safety-filter block), since those fail identically everywhere
-   and retrying would just multiply wasted calls. */
-const GEMINI_MODEL_CANDIDATES = ["gemini-pro-latest", "gemini-flash-latest", "gemini-2.5-pro", "gemini-2.5-flash"];
+   Ordered by which tier Google's free plans typically grant the MOST
+   requests-per-minute to, cheapest/highest-quota first: flash, then
+   flash-lite (the cheapest tier of all, so the most likely to still have
+   room when pro/flash are throttled), then pro last -- pro-tier free
+   quotas are usually the smallest, so it is now the fallback instead of
+   the first attempt; the earlier "pro first for accuracy" choice was
+   right about quality but wrong about reliability once the account is
+   this rate-limited. Falls through to the next candidate on a 404 (name
+   genuinely gone/inaccessible to this account) or once a model's own
+   retries (see RETRYABLE_STATUS below) are exhausted -- never on an
+   unrelated failure (bad key, safety-filter block), since those fail
+   identically everywhere and retrying would just multiply wasted calls.
+
+   IMPORTANT, and outside what any model-list reshuffle can fix: if EVERY
+   candidate here is still 429ing, that is the account's actual quota
+   window (per-minute or per-day) being exhausted, and no amount of
+   retrying inside one request changes that -- see Google AI Studio's
+   quota/billing page for this key; enabling pay-as-you-go billing raises
+   these limits substantially over the free tier. */
+const GEMINI_MODEL_CANDIDATES = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest"];
 const LANG_NAMES = { si: "Sinhala", en: "English", ta: "Tamil" };
 
 async function verifyIdToken(idToken, apiKey) {
@@ -218,6 +229,21 @@ async function callGeminiWithFallback(promptText, apiKey) {
   throw lastErr;
 }
 
+/* Surfaces quota exhaustion as its own distinct, unmistakable reason
+   instead of a generic "translation failed" -- this exact failure mode
+   was hard to diagnose from the admin UI alone (identical-looking to a
+   dead model name or a bad key) until someone went and read Vercel's raw
+   runtime logs by hand. quotaExceeded lets the client show a genuinely
+   different message ("wait a bit / check billing", not "retry now",
+   since retrying inside this same request already happened and did not
+   help). */
+function describeGeminiError(e) {
+  const message = (e && e.message) || String(e);
+  const status = e && e.status;
+  const quotaExceeded = status === 429 || /exceeded your current quota|rate.?limit/i.test(message);
+  return { message, quotaExceeded };
+}
+
 function parseGeminiJson(raw) {
   /* Models occasionally wrap JSON in ```json fences despite instructions --
      strip those before parsing rather than failing outright. */
@@ -301,7 +327,8 @@ module.exports = async function handler(req, res) {
       res.status(200).json({ ok: true, consistent: parsed.consistent, severity: parsed.severity, issue: parsed.issue, suggestion: parsed.suggestion, model });
     } catch (e) {
       console.error("ai-translate audit failed:", e && e.stack ? e.stack : e);
-      res.status(502).json({ error: "Translation service unreachable or failed: " + (e && e.message ? e.message : String(e)) });
+      const { message, quotaExceeded } = describeGeminiError(e);
+      res.status(502).json({ error: "Translation service unreachable or failed: " + message, quotaExceeded });
     }
     return;
   }
@@ -327,6 +354,7 @@ module.exports = async function handler(req, res) {
        API key, a safety-filter block, etc. all look identical from the
        client's side otherwise). */
     console.error("ai-translate failed:", e && e.stack ? e.stack : e);
-    res.status(502).json({ error: "Translation service unreachable or failed: " + (e && e.message ? e.message : String(e)) });
+    const { message, quotaExceeded } = describeGeminiError(e);
+    res.status(502).json({ error: "Translation service unreachable or failed: " + message, quotaExceeded });
   }
 };
