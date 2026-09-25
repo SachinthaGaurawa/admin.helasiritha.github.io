@@ -46,20 +46,29 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 const ADMIN_EMAIL = "gaurawasachintha@gmail.com";
-/* Google periodically retires model IDs outright (not a quota/deprecation
-   WARNING -- a hard 404, "is no longer available") and names the current
-   replacement directly in that error. gemini-2.0-flash was one such
-   casualty; Google's own error response named gemini-3.8-flash as its
-   replacement. gemini-3.8-pro is tried FIRST for the higher translation
-   accuracy a pro-tier model gives (the admin's Google account has Pro
-   access), falling back to the flash tier automatically -- ONLY on a 404
-   (model retired/renamed), never on an unrelated failure (bad key, quota,
-   a safety-filter block), since those would fail identically on every
-   candidate and retrying would just multiply wasted Gemini calls. This is
-   what should have existed the first time a model name went stale: one
-   silent, automatic recovery step instead of a hard outage until the next
-   manual deploy. */
-const GEMINI_MODEL_CANDIDATES = ["gemini-3.8-pro", "gemini-3.8-flash"];
+/* Confirmed against Gemini's own live ListModels API (GET ?probe=models on
+   this same file) after TWO rounds of guessing a specific version number
+   went wrong: "gemini-3.8-pro" flat-out never existed (every request was
+   silently eating a 404 on it before ever reaching a real model), and
+   "gemini-3.8-flash" -- Google's own error text once named it the correct
+   replacement for retired gemini-2.0-flash -- is a genuinely new, heavily
+   hyped release that Google's shared pool keeps rate-limiting (503) under
+   ordinary load, not a broken config.
+
+   Both problems share one real fix: stop pinning a specific dated version
+   at all. "-latest" is Google's own alias for "whatever the current best
+   model actually is" -- it never 404s when Google ships a new version
+   under the hood, which is the exact failure this file has now hit twice.
+   Tried first (pro, for the higher accuracy the admin's Pro-tier account
+   gives; then flash). The 2.5-generation models are the fallback after
+   that: not brand new, not what everyone is currently hammering, so they
+   are the candidates most likely to have spare capacity on a day the
+   newest release is overloaded. Falls through to the next candidate on a
+   404 (name genuinely gone) or once a model's own retries (see
+   RETRYABLE_STATUS below) are exhausted -- never on an unrelated failure
+   (bad key, safety-filter block), since those fail identically everywhere
+   and retrying would just multiply wasted calls. */
+const GEMINI_MODEL_CANDIDATES = ["gemini-pro-latest", "gemini-flash-latest", "gemini-2.5-pro", "gemini-2.5-flash"];
 const LANG_NAMES = { si: "Sinhala", en: "English", ta: "Tamil" };
 
 async function verifyIdToken(idToken, apiKey) {
@@ -172,11 +181,15 @@ async function callGeminiOnce(model, promptText, apiKey) {
    limit) and 500/502/504 (transient upstream trouble) get the same
    treatment. 400/401/403 do NOT retry -- a malformed request or a bad/
    restricted key fails identically every time, so retrying just delays
-   the real, actionable error for no benefit. Kept short (well under a
-   typical serverless function's timeout budget) since this runs inline
-   in the request the admin is actively waiting on. */
+   the real, actionable error for no benefit. One retry per model, not
+   several: with four candidates now (see GEMINI_MODEL_CANDIDATES above),
+   trying a genuinely DIFFERENT model is a more effective use of time than
+   hammering the same overloaded one repeatedly, and keeps the worst-case
+   total (every candidate, every retry) well under a typical serverless
+   function's timeout budget for a request the admin is actively waiting
+   on inline. */
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
-const RETRY_DELAYS_MS = [400, 1000];
+const RETRY_DELAYS_MS = [600];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function callGeminiWithFallback(promptText, apiKey) {
