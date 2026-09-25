@@ -100,6 +100,42 @@ async function verifyIdToken(idToken, apiKey) {
   return u || null;
 }
 
+/* BRAND VOICE ─────────────────────────────────────────────────────────────
+   Explicit, repeated instruction from the site owner: this is for
+   "Helasiritha" -- a formal Sri Lankan wedding invitation whose entire
+   identity rests on royal dignity, pride, gravitas, and being 100%
+   culturally authentic. A technically-accurate but stiff, literal,
+   word-for-word translation reads as machine-generated, not as something a
+   fluent, culturally-fluent human would write for this occasion -- and
+   that mismatch is treated as seriously as a factual mistake, not a mere
+   style preference. Shared by both buildPrompt (new translations) and
+   buildAuditPrompt (so a proposed correction inherits the same voice, not
+   just the original translation). */
+const BRAND_VOICE = (
+  "VOICE (apply this to whichever language you are writing in): this text is for " +
+  "\"Helasiritha\", a formal Sri Lankan wedding invitation whose whole identity is " +
+  "royal dignity, warmth, and 100% authentic cultural tradition. Every version must " +
+  "read as if written by a fluent native speaker deeply versed in THAT language's " +
+  "own classical, ceremonial wedding-invitation literary tradition -- never as a " +
+  "mechanical, literal, word-for-word rendering that merely swaps vocabulary while " +
+  "keeping the source language's sentence structure. Specifically:\n" +
+  "- Sinhala: the traditional ceremonial register used in formal Sinhala wedding " +
+  "invitations and sannasa scrolls (e.g. සුභ මංගල්‍යය, පාණිග්‍රහණය, ආචාර්ය මාන්‍ය, " +
+  "ආදරණීය, මහත්මාණෝ/මහත්මිය වැනි සාම්ප්‍රදායික ගෞරව වචන) -- not casual spoken Sinhala, " +
+  "and not a stiff calque of the source language's grammar.\n" +
+  "- Tamil: the classical, elegant register used in formal Tamil wedding invitations " +
+  "(e.g. சுப மங்களம், திருமண வைபவம், அன்புடன் அழைக்கிறோம் போன்ற பாரம்பரிய சொற்றொடர்கள்) -- " +
+  "not a literal transliteration-style rendering of the source language's structure.\n" +
+  "- English: the elegant, dignified formal register of traditional South Asian " +
+  "wedding invitations (e.g. \"cordially invite\", \"request the honour/pleasure of " +
+  "your company\", \"the beloved daughter/son of\") -- not a stiff calque of the " +
+  "Sinhala/Tamil source's grammar.\n" +
+  "A technically-correct but unnatural, machine-sounding sentence is exactly the " +
+  "kind of mistake this whole effort exists to catch -- if a literal rendering " +
+  "would sound robotic or mechanical, rephrase freely while preserving the exact " +
+  "meaning, warmth, and ceremonial gravitas of the original."
+);
+
 /* One request asks Gemini to translate AND self-critique in the same call
    -- cheaper than two round-trips, and keeps the critique grounded in the
    exact translation it just produced rather than re-judging it cold. */
@@ -108,13 +144,16 @@ function buildPrompt(text, fromLang, toLang, fieldContext) {
     "You are translating one short piece of formal wedding-invitation text from " +
     LANG_NAMES[fromLang] + " to " + LANG_NAMES[toLang] + ".\n" +
     "Context for this specific text: " + (fieldContext || "a wedding invitation field") + "\n" +
+    BRAND_VOICE + "\n\n" +
     "Source text:\n" + text + "\n\n" +
-    "Produce a translation that reads naturally and formally in " + LANG_NAMES[toLang] +
+    "Produce a translation that reads naturally, warmly, and formally in " + LANG_NAMES[toLang] +
     " for a wedding invitation, preserving the ceremonial/honorific register of the original " +
-    "(do not translate literally word-for-word if that would sound unnatural).\n\n" +
+    "(do not translate literally word-for-word if that would sound unnatural or robotic).\n\n" +
     "Then rate your OWN confidence in this translation as exactly one of: high, medium, low. " +
-    "Use \"low\" if the source text is ambiguous, unusually idiomatic, or you are genuinely " +
-    "unsure of a natural formal phrasing. Add a short note (one sentence, or empty string if " +
+    "Use \"low\" if the source text is ambiguous, unusually idiomatic, you are genuinely unsure " +
+    "of a natural formal phrasing, or you suspect your own translation still leans too literal/" +
+    "mechanical rather than sounding like something a culturally-fluent native speaker would " +
+    "naturally write for this occasion. Add a short note (one sentence, or empty string if " +
     "confidence is high) explaining what specifically you are unsure about.\n\n" +
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
     '{"translation":"...","confidence":"high|medium|low","note":"..."}'
@@ -155,7 +194,8 @@ function buildAuditPrompt(langValues, fieldContext) {
     "You are a meticulous professional proofreader and translator reviewing the language " +
     "versions of ONE field of a formal Sri Lankan wedding invitation, checking whether they " +
     "are faithful, natural, and internally correct equivalents of each other.\n" +
-    "Context for this field: " + (fieldContext || "a wedding invitation field") + "\n\n" +
+    "Context for this field: " + (fieldContext || "a wedding invitation field") + "\n" +
+    BRAND_VOICE + "\n\n" +
     lines + "\n\n" +
     "Check thoroughly for ALL of the following, in order of importance:\n" +
     "1. MEANING/FACTUAL mismatch: a name, date, number, place, or relationship (e.g. \"father\" " +
@@ -172,6 +212,12 @@ function buildAuditPrompt(langValues, fieldContext) {
     "6. REGISTER/HONORIFIC consistency: is the level of formality and any honorifics " +
     "(Mr./Mrs., ආදරණීය, திரு/திருமதி etc.) consistent with a formal wedding invitation across " +
     "all versions present?\n" +
+    "7. VOICE: does EACH version read as natural, warm, traditional ceremonial language a " +
+    "culturally-fluent native speaker would write for this occasion -- or does it sound stiff, " +
+    "literal, or mechanically translated (a calque of another version's sentence structure, or " +
+    "generic/robotic phrasing that lacks the dignity and warmth this invitation calls for)? " +
+    "Flag this even when the meaning is technically correct -- an unnatural, machine-sounding " +
+    "version is treated as seriously as a factual mistake here.\n" +
     "Do NOT flag natural differences in sentence structure or word order between languages -- " +
     "those are expected and correct, not mistakes.\n\n" +
     "Respond with ONLY this exact JSON shape, no other text, no markdown fences:\n" +
@@ -180,15 +226,20 @@ function buildAuditPrompt(langValues, fieldContext) {
     presentLangs.map((l) => '"' + l + '":"..."').join(",") +
     "}}\n" +
     "consistent=true, severity=\"none\", confidence=\"high\" with empty issue/suggestion and every " +
-    "corrections value set to an empty string \"\" if every version genuinely matches and is " +
-    "internally correct. Otherwise describe the SPECIFIC problem in \"issue\" (one sentence), a " +
+    "corrections value set to an empty string \"\" if every version genuinely matches, is " +
+    "internally correct, AND reads naturally per the VOICE check above. Otherwise describe the " +
+    "SPECIFIC problem in \"issue\" (one sentence), a " +
     "human-readable fix in \"suggestion\" (one sentence), and in \"corrections\" give the FULL " +
     "corrected text (not a diff, not a description -- the complete replacement text ready to " +
     "paste in) for EVERY language you listed above that needs a change to fix this specific " +
-    "problem, using the language(s) you judge correct as the source of truth; leave any " +
-    "language that is already correct as an empty string \"\" in corrections (do not rewrite " +
-    "text that isn't wrong). Set confidence=\"low\" only if you are genuinely unsure whether " +
-    "something is actually a mistake (e.g. a stylistic choice that might be intentional)."
+    "problem. For a meaning/fact/content/numeral/name problem (checks 1-4), use the language(s) " +
+    "you judge correct as the source of truth for the one(s) that are wrong. For an internal-" +
+    "correctness or VOICE problem (checks 5 and 7), rewrite ONLY that language into natural, " +
+    "traditional, dignified phrasing per the VOICE guidance above, preserving its exact meaning " +
+    "-- do not change a different language just because one sounds robotic. Leave any language " +
+    "that is already correct AND already natural as an empty string \"\" in corrections (do not " +
+    "rewrite text that isn't wrong). Set confidence=\"low\" only if you are genuinely unsure " +
+    "whether something is actually a mistake (e.g. a stylistic choice that might be intentional)."
   );
 }
 
