@@ -485,7 +485,8 @@ function effGuests() {
       party: r ? Math.max(0, num(r.party, 0)) : 0,
       tableNumber: g.tableNumber == null ? null : num(g.tableNumber, null),
       respondedAt: r && r.ts && r.ts.seconds ? r.ts.seconds : 0,
-      hasRsvp: !!r
+      hasRsvp: !!r,
+      title: g.title || ""
     };
   });
 }
@@ -1002,6 +1003,51 @@ function saveTheme(t, keepPrev) {
   }
   return withAudit(setDoc(doc(db, "site", "theme"), payload, { merge: true }), "theme.save", t.primary || "");
 }
+/* Honorific titles a guest may carry (Dr., Prof., Rev., ...) -- requested
+   directly: some invited guests are doctors, academics, clergy etc., and
+   the admin needs to record that the same way across the whole guest list,
+   not retype it inconsistently into the name field by hand every time.
+   Deliberately a FIXED, closed lookup table, not an AI translation call:
+   a title is one of a small, known set, so looking its three-language
+   label up here is actually MORE accurate than asking a model to translate
+   it per guest (no model variance, no risk of a title back-translating
+   differently for two different guests who share one).
+   `siAfter: true` matters for grammatical correctness, not just vocabulary
+   -- Sinhala places මහතා/මහත්මිය/කුමරිය/මිය (Mr./Mrs./Miss/Ms.) AFTER the
+   full name ("සුනිල් පෙරේරා මහතා"), while ආචාර්ය/මහාචාර්ය/පූජ්‍ය/etc. go
+   BEFORE it, exactly like English and Tamil always do. Getting this
+   backwards reads as a foreigner's mistake, not just an odd translation. */
+const GUEST_TITLES = [
+  { key: "",     si: "",            en: "",       ta: "" },
+  { key: "mr",   si: "මහතා",        en: "Mr.",    ta: "திரு.",       siAfter: true },
+  { key: "mrs",  si: "මහත්මිය",     en: "Mrs.",   ta: "திருமதி.",    siAfter: true },
+  { key: "miss", si: "කුමරිය",      en: "Miss",   ta: "செல்வி",      siAfter: true },
+  { key: "ms",   si: "මිය",         en: "Ms.",    ta: "செல்வி",      siAfter: true },
+  { key: "dr",   si: "ආචාර්ය",      en: "Dr.",    ta: "டாக்டர்." },
+  { key: "prof", si: "මහාචාර්ය",    en: "Prof.",  ta: "பேராசிரியர்." },
+  { key: "rev",  si: "පූජ්‍ය",       en: "Rev.",   ta: "அருட்திரு." },
+  { key: "hon",  si: "ගෞරවනීය",    en: "Hon.",   ta: "மேதகு." },
+  { key: "eng",  si: "ඉංජිනේරු",    en: "Eng.",   ta: "பொறியாளர்." }
+];
+function guestTitleOptions(selected) {
+  return GUEST_TITLES.map(t =>
+    '<option value="' + esc(t.key) + '"' + (t.key === (selected || "") ? " selected" : "") + '>' +
+    (t.key ? esc(t.si + " (" + t.en + ")") : "නොතෝරා") + '</option>').join("");
+}
+/* Joins a title onto a name the grammatically correct way for the given
+   language (see GUEST_TITLES' own comment on siAfter) -- `name` and
+   `titleKey` are kept as always-separate stored fields (never merged into
+   one string), so this is purely a DISPLAY-time join, safe to call
+   anywhere a guest's name is shown. An unknown/blank key or a title with
+   no label for this language returns the plain name unchanged. */
+function titledName(name, titleKey, lang) {
+  const n = name || "";
+  const t = GUEST_TITLES.find(x => x.key === titleKey);
+  const label = t && t[lang];
+  if (!label) return n;
+  if (lang === "si" && t.siAfter) return n ? (n + " " + label) : label;
+  return n ? (label + " " + n) : label;
+}
 /* `guestsPublic/{id}` mirrors {name, family, side} plus the Sinhala/English/
    Tamil search variants (nameSi/nameEn/nameTa/familySi/familyEn/familyTa --
    see wireNameTrio()/nameVariants() for how those get generated) out of
@@ -1009,7 +1055,7 @@ function saveTheme(t, keepPrev) {
    doc) so a visitor can never see another guest's status/table — see
    firestore.rules. Every guest-mutating path below keeps it in sync;
    "Rebuild directory" in the Security panel repairs it if it ever drifts. */
-const GUEST_MIRROR_FIELDS = ["name", "nameSi", "nameEn", "nameTa", "family", "familySi", "familyEn", "familyTa", "side"];
+const GUEST_MIRROR_FIELDS = ["name", "nameSi", "nameEn", "nameTa", "family", "familySi", "familyEn", "familyTa", "side", "title"];
 function mirrorFieldsFrom(o) {
   const pub = {};
   GUEST_MIRROR_FIELDS.forEach(k => { if (k in o) pub[k] = o[k] || ""; });
@@ -2249,6 +2295,8 @@ renderers.guests = function () {
       '<div class="ai-tri-row" style="margin:-6px 0 10px">' +
         '<button class="btn xs ghost ai-tri-btn" type="button" data-ai-base="g_family">✨ AI පරිවර්තනය</button>' +
         '<span class="ai-tri-status" id="g_family_aiStatus"></span></div>' +
+      '<div class="field"><label for="g_title">ගෞරව නාමය (විකල්ප)</label><select class="inp" id="g_title">' + guestTitleOptions("") + '</select>' +
+        '<p class="hint" style="margin-top:4px">වෛද්‍යවරුන්, ආචාර්යවරුන්, පූජ්‍ය පක්ෂිකයන් වැනි අයට — තෝරාගත් ගෞරව නාමය භාෂා තුනටම (සිංහල/English/தமிழ்) ස්වයංක්‍රීයව, නිවැරදිව පෙරළේ. අවශ්‍ය නැත්නම් නොතෝරාම තබන්න.</p></div>' +
       '<div class="grid2">' +
         '<div class="field"><label for="g_side">පාර්ශවය</label><select class="inp" id="g_side">' +
           '<option value="bride">කෞෂානිගේ පාර්ශවය</option><option value="groom">ගෞරවගේ පාර්ශවය</option></select></div>' +
@@ -2276,11 +2324,12 @@ renderers.guests = function () {
         chip("ගෞරව (" + groom + ")", "groom", gFilter.side) +
       '</div>' +
       (slice.length
-        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th><th>මේසය</th><th></th></tr></thead><tbody>' +
+        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>නම</th><th>පවුල</th><th>ගෞරව නාමය</th><th>පාර්ශවය</th><th>ගණන</th><th>තත්ත්වය</th><th>මේසය</th><th></th></tr></thead><tbody>' +
           slice.map(g =>
             '<tr>' +
             '<td><input class="mini k-name" data-id="' + g.id + '" value="' + esc(g.name) + '" style="min-width:118px"></td>' +
             '<td><input class="mini k-fam" data-id="' + g.id + '" value="' + esc(g.family) + '" style="min-width:104px"></td>' +
+            '<td><select class="mini k-title" data-id="' + g.id + '">' + guestTitleOptions(g.title) + '</select></td>' +
             '<td><select class="mini k-side" data-id="' + g.id + '"><option value="bride"' + (g.side === "bride" ? " selected" : "") + '>කෞෂානි</option><option value="groom"' + (g.side === "groom" ? " selected" : "") + '>ගෞරව</option></select></td>' +
             '<td>' + stepper("k-count", g.id, g.count, 1, 40) + '</td>' +
             '<td><select class="mini k-status" data-id="' + g.id + '"><option value="pending"' + (g.status === "pending" ? " selected" : "") + '>පොරොත්තු</option><option value="confirmed"' + (g.status === "confirmed" ? " selected" : "") + '>තහවුරු</option><option value="declined"' + (g.status === "declined" ? " selected" : "") + '>නොපැමිණේ</option></select></td>' +
@@ -2319,12 +2368,14 @@ renderers.guests = function () {
       await addGuest({
         name, nameSi, nameEn, nameTa,
         family: familySi || familyEn || familyTa, familySi, familyEn, familyTa,
+        title: $("#g_title").value,
         side: $("#g_side").value,
         count: clampInt($("#g_count").value, 1, 40), status: "pending",
         tableNumber: null
       });
       resetNameTrio({ si: "g_name_si", en: "g_name_en", ta: "g_name_ta" });
       resetNameTrio({ si: "g_family_si", en: "g_family_en", ta: "g_family_ta" });
+      $("#g_title").value = "";
       $("#g_count").value = "1";
       syncTxtDisplays(); // g_count's .value above bypassed "input", so its overlay needs a manual repaint
       toast("ආගන්තුකයා එක් විය ✓", "ok");
@@ -2372,6 +2423,7 @@ renderers.guests = function () {
       toast("පවුල යාවත්කාලීනයි", "ok");
     } catch (e) { toast("දෝෂයකි", "err"); }
   });
+  bind(".k-title", async el => { try { await updGuest(el.dataset.id, { title: el.value }); toast("ගෞරව නාමය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   bind(".k-side", async el => { try { await updGuest(el.dataset.id, { side: el.value }); toast("පාර්ශවය යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   wireSteppers(".k-count", async (id, n) => { try { await updGuest(id, { count: clampInt(n, 1, 40) }); toast("ගණන යාවත්කාලීනයි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
   wireSteppers(".k-table", async (id, n) => { const v = n > 0 ? clampInt(n, 1, 99) : null; try { await updGuest(id, { tableNumber: v }); toast(v ? "මේස " + v + " පවරන ලදී" : "මේසය ඉවත් කෙරිණි", "ok"); } catch (e) { toast("දෝෂයකි", "err"); } });
@@ -2585,7 +2637,7 @@ renderers.rsvp = function () {
                the other renders as a muted outline, so the row has exactly
                one unambiguous answer, not two competing-looking ones. */
             const yesIsCurrent = g.status === "confirmed", noIsCurrent = g.status === "declined";
-            return '<tr><td>' + esc(g.name) + '</td><td>' + esc(g.family) + '</td>' +
+            return '<tr><td>' + esc(titledName(g.name, g.title, "si")) + '</td><td>' + esc(g.family) + '</td>' +
             '<td><span class="pill side">' + esc(sideName(g.side)) + '</span></td>' +
             '<td>' + statusPill(g.status) + '</td>' +
             '<td class="num">' + (g.party || g.count) + '</td>' +
@@ -2637,11 +2689,11 @@ renderers.rsvp = function () {
     try { await fn(g); toast("යාවත්කාලීන විය ✓", "ok"); } catch (e) { toast("දෝෂයකි", "err"); }
   });
   act(".r-yes", async g => { const p = Math.max(1, g.party || g.count); await setRsvp(g, { attending: true, party: p, count: p }); await updGuest(g.id, { status: "confirmed" }); },
-    g => g.name + " ගේ පිළිතුර 'තහවුරු' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    g => titledName(g.name, g.title, "si") + " ගේ පිළිතුර 'තහවුරු' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
   act(".r-no",  async g => { await setRsvp(g, { attending: false, party: 0, count: 0 }); await updGuest(g.id, { status: "declined" }); },
-    g => g.name + " ගේ පිළිතුර 'නොපැමිණේ' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    g => titledName(g.name, g.title, "si") + " ගේ පිළිතුර 'නොපැමිණේ' ලෙස සලකුණු කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
   act(".r-clr", async g => { await delRsvp(g.id); await updGuest(g.id, { status: "pending" }); },
-    g => g.name + " ගේ පිළිතුර හිස් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
+    g => titledName(g.name, g.title, "si") + " ගේ පිළිතුර හිස් කිරීමට ඔබගේ ආරක්ෂක PIN අංකය ඇතුළත් කරන්න.");
   $("#rCsv").onclick = () => {
     const rows = [["නම", "පවුල", "පාර්ශවය", "තත්ත්වය", "සංඛ්‍යාව"]].concat(
       effGuests().map(g => [g.name, g.family, sideName(g.side),
